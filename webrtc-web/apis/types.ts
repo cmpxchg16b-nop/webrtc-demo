@@ -86,3 +86,8 @@ export interface ConnRegistryData {
   attributes?: ConnectionAttributes;
   authentication: AuthenticationType;
 }
+
+export type ConnEntry = {
+  node_id: string;
+  entry: ConnRegistryData;
+};

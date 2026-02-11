@@ -1,357 +1,36 @@
 "use client";
 
 import {
-  ConnRegistryData,
+  ConnEntry,
   EchoDirectionC2S,
   EchoDirectionS2C,
   MessagePayload,
   RegisterPayload,
 } from "@/apis/types";
-import { ContentCopy, CopyAll, Refresh } from "@mui/icons-material";
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogTitle,
-  DialogContent,
-  TextField,
-  Tooltip,
-  IconButton,
-  Paper,
-} from "@mui/material";
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  RefObject,
-} from "react";
+  AnswerDialog,
+  CandidateInputDialog,
+  ChangeNameDialog,
+  LocalDescriptionInputDialog,
+  OfferDialog,
+  RemoteDescriptionInputDialog,
+} from "@/components/InputDialog";
+import { Box, Button, Card, Chip } from "@mui/material";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { LeftPanel } from "@/components/LeftPanel";
+import { getConns } from "@/apis/conns";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 
-function MultipleInputAcceptor(props: {
-  title: string;
-  rows?: number;
-  open: boolean;
-  onCancel: () => void;
-  onConfirm: (input: string) => void;
-}) {
-  const [candidateText, setCandidateText] = useState("");
-  const { title, rows = 4, open, onCancel, onConfirm } = props;
-  return (
-    <Dialog
-      maxWidth="md"
-      fullWidth
-      open={open}
-      onClose={() => {
-        onCancel();
-      }}
-    >
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        <TextField
-          variant="outlined"
-          multiline
-          rows={rows}
-          fullWidth
-          value={candidateText}
-          onChange={(e) => {
-            setCandidateText(e.target.value);
-          }}
-        />
-        <DialogActions sx={{ marginTop: 2 }}>
-          <Button
-            onClick={() => {
-              onCancel();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              onConfirm(candidateText);
-            }}
-          >
-            Set
-          </Button>
-        </DialogActions>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CandidateInputDialog(props: {
-  peerConnectionRef: RefObject<RTCPeerConnection | null>;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { peerConnectionRef, open, onClose } = props;
-  return (
-    <MultipleInputAcceptor
-      title="Add Candidate"
-      rows={4}
-      open={open}
-      onCancel={onClose}
-      onConfirm={(input) => {
-        try {
-          const candidate = JSON.parse(input);
-          peerConnectionRef.current?.addIceCandidate(candidate);
-          onClose();
-        } catch (e) {
-          console.error(e);
-        }
-      }}
-    />
-  );
-}
-
-function RemoteDescriptionInputDialog(props: {
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { peerConnectionRef, open, onClose } = props;
-  return (
-    <MultipleInputAcceptor
-      title="Remote Description"
-      rows={4}
-      open={open}
-      onCancel={onClose}
-      onConfirm={(input) => {
-        try {
-          const remoteDescription = JSON.parse(input);
-          peerConnectionRef.current?.setRemoteDescription(remoteDescription);
-          onClose();
-        } catch (e) {
-          console.error(e);
-        }
-      }}
-    />
-  );
-}
-
-function LocalDescriptionInputDialog(props: {
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { peerConnectionRef, open, onClose } = props;
-  return (
-    <MultipleInputAcceptor
-      title="Local Description"
-      rows={4}
-      open={open}
-      onCancel={onClose}
-      onConfirm={(input) => {
-        try {
-          const localDescription = JSON.parse(input);
-          peerConnectionRef.current?.setLocalDescription(localDescription);
-          onClose();
-        } catch (e) {
-          console.error(e);
-        }
-      }}
-    />
-  );
-}
-
-function OfferDialog(props: {
-  open: boolean;
-  onClose: () => void;
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>;
-  dataChannelRef: React.RefObject<RTCDataChannel | null>;
-}) {
-  const [candidateText, setCandidateText] = useState("");
-  const { open, onClose, peerConnectionRef, dataChannelRef } = props;
-  return (
-    <Dialog
-      maxWidth="md"
-      fullWidth
-      open={open}
-      onClose={() => {
-        onClose();
-      }}
-    >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          gap: 1,
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        <Box>Offer</Box>
-        <Box>
-          <Tooltip title={"Refresh"}>
-            <IconButton
-              onClick={() => {
-                const peerConnection = peerConnectionRef.current;
-                const dc = peerConnection?.createDataChannel("dc1");
-                if (dc) {
-                  dataChannelRef.current = dc;
-                  dc.onopen = () => {
-                    console.log("[dbg] data channel opened", dc);
-                  };
-                  dc.onclose = () => {
-                    console.log("[dbg] data channel closed", dc);
-                  };
-                  dc.onerror = (error) => {
-                    console.error("[dbg] data channel error", error);
-                  };
-                  dc.onmessage = (event) => {
-                    console.log("[dbg] data channel message", event.data, dc);
-                  };
-
-                  peerConnectionRef.current?.createOffer().then((offer) => {
-                    setCandidateText(JSON.stringify(offer));
-                    peerConnection?.setLocalDescription(offer);
-                  });
-                }
-              }}
-            >
-              <Refresh />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={"Copy"}>
-            <IconButton
-              onClick={() => {
-                navigator?.clipboard?.writeText(candidateText);
-              }}
-            >
-              <ContentCopy />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <TextField
-          variant="outlined"
-          multiline
-          rows={4}
-          fullWidth
-          value={candidateText}
-          onChange={(e) => {
-            setCandidateText(e.target.value);
-          }}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type AnswerDlgState = {
-  show: boolean;
-  answer: RTCSessionDescriptionInit | null;
-};
-
-function AnswerDialog(props: {
-  open: boolean;
-  onClose: () => void;
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>;
-}) {
-  const { open, onClose, peerConnectionRef } = props;
-  const [answerText, setAnswerText] = useState("");
-  return (
-    <Dialog
-      maxWidth="md"
-      fullWidth
-      open={open}
-      onClose={() => {
-        onClose();
-      }}
-    >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          gap: 1,
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        <Box>Answer</Box>
-        <Box>
-          <Tooltip title={"Refresh"}>
-            <IconButton
-              onClick={() => {
-                peerConnectionRef.current?.createAnswer().then((answer) => {
-                  setAnswerText(JSON.stringify(answer));
-                });
-              }}
-            >
-              <Refresh />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={"Copy"}>
-            <IconButton
-              onClick={() => {
-                navigator?.clipboard?.writeText(answerText);
-              }}
-            >
-              <ContentCopy />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <TextField
-          variant="outlined"
-          multiline
-          rows={4}
-          fullWidth
-          value={answerText}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
-const getEntriesDelayMs = 500;
-const apiEndpoint = "http://localhost:3001";
 
-type ConnEntry = {
-  node_id: string;
-  entry: ConnRegistryData;
-};
-
-function getConns() {
-  return fetch(`${apiEndpoint}/conns`)
-    .then((r) => r.json())
-    .then((r) => r as Record<string, ConnRegistryData>)
-    .then((r) => {
-      const entries: ConnEntry[] = [];
-      return Object.entries(r).map(
-        ([nodeId, entry]) =>
-          ({
-            node_id: nodeId,
-            entry: entry,
-          }) as ConnEntry,
-      );
-    });
-}
-
-function WSPanel(props: {
-  wsUrl: string;
-  myName: string;
-  onNameChange: (name: string) => void;
-}) {
-  const { wsUrl, myName, onNameChange } = props;
+function useWs() {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const correlationId = useMemo(() => crypto.randomUUID(), []);
 
-  const [showChangeName, setShowChangeName] = useState(false);
   const [nodeId, setNodeId] = useState<string>("");
   const seqRef = useRef(0);
   const pingTxMapRef = useRef<Record<string, number>>({});
@@ -361,6 +40,7 @@ function WSPanel(props: {
   const [upTime, setUpTime] = useState<number | undefined>(undefined);
   const pingTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [conns, setConns] = useState<ConnEntry[]>([]);
+  const [name, setName] = useState<string>("");
 
   const doConnect = (addr: string) => {
     setConnecting(true);
@@ -373,7 +53,7 @@ function WSPanel(props: {
       setConnecting(false);
       console.log("[dbg] ws connected", ws);
       const registerPayload: RegisterPayload = {
-        node_name: myName,
+        node_name: "",
       };
       const registerMsg: MessagePayload = {
         register: registerPayload,
@@ -452,6 +132,41 @@ function WSPanel(props: {
     };
   };
 
+  return {
+    rtt,
+    lastSeq,
+    upTime,
+    nodeId,
+    conns,
+    connected,
+    connecting,
+    wsRef,
+    doConnect,
+    name,
+  };
+}
+
+function WSPanel(props: { wsUrl: string }) {
+  const { wsUrl } = props;
+
+  const [showChangeName, setShowChangeName] = useState(false);
+
+  const {
+    rtt,
+    lastSeq,
+    upTime,
+    nodeId,
+    name,
+    conns,
+    connected,
+    connecting,
+    wsRef,
+    doConnect,
+  } = useWs();
+
+  const nameDisplay = name ? `as ${name}` : "";
+  const [nameEdited, setNameEdited] = useState<string>("");
+
   return (
     <Fragment>
       <Box>
@@ -460,7 +175,7 @@ function WSPanel(props: {
             <Box>
               <Box>Basics Info</Box>
               <Box>
-                Connected to {wsRef?.current?.url} as {myName}
+                Connected to {wsRef?.current?.url} {nameDisplay}
               </Box>
               {nodeId && <Box>NodeId: {nodeId}</Box>}
 
@@ -480,6 +195,7 @@ function WSPanel(props: {
               <Box>
                 <Button
                   onClick={() => {
+                    setNameEdited(name);
                     setShowChangeName(true);
                   }}
                 >
@@ -503,7 +219,7 @@ function WSPanel(props: {
             <Button
               loading={connecting}
               onClick={() => {
-                doConnect(wsAddr);
+                doConnect(wsUrl);
               }}
             >
               Connect
@@ -511,55 +227,21 @@ function WSPanel(props: {
           </Box>
         )}
       </Box>
+      <ChangeNameDialog
+        name={nameEdited}
+        onNameChange={(name) => {
+          setNameEdited(name);
+        }}
+        open={showChangeName}
+        onClose={() => {
+          setShowChangeName(false);
+        }}
+      />
     </Fragment>
   );
 }
 
-function LeftPanel(props: { initW?: number; children: React.ReactNode }) {
-  const { initW = 420, children } = props;
-  const [width, setWidth] = useState(initW);
-  return (
-    <Box sx={{ width: `${width}px`, height: "100%", position: "relative" }}>
-      <Paper sx={{ height: "100%" }}>{children}</Paper>
-      <Box
-        onMouseDown={(e) => {
-          const w0 = width;
-          const x0 = e.clientX;
-          const handleMouseMove = (e: MouseEvent) => {
-            const x = e.clientX;
-            const dw = x - x0;
-            const w = w0 + dw;
-            setWidth(w);
-          };
-          window.addEventListener("mousemove", handleMouseMove);
-          const handleMouseUp = () => {
-            window.removeEventListener("mousemove", handleMouseMove);
-            window.removeEventListener("mouseup", handleMouseUp);
-          };
-          window.addEventListener("mouseup", handleMouseUp);
-        }}
-        sx={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: "6px",
-          backgroundColor: "#aaa",
-          height: "100%",
-          cursor: "col-resize",
-          opacity: 0,
-          transition: "opacity 0.3s ease-in-out",
-          "&:hover": {
-            opacity: 1,
-          },
-        }}
-      ></Box>
-    </Box>
-  );
-}
-
 export default function Home() {
-  useEffect(() => {}, []);
-
   const [candidates, setCandidates] = useState<RTCIceCandidate[]>([]);
   const [addCandidateDlgOpen, setAddCandidateDlgOpen] = useState(false);
   const [setRemoteDescriptionDlgOpen, setSetRemoteDescriptionDlgOpen] =
@@ -636,7 +318,7 @@ export default function Home() {
       <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
         <LeftPanel>
           <Box sx={{ padding: 2 }}>
-            <WSPanel myName={myName} wsUrl={wsAddr} onNameChange={setMyName} />
+            <WSPanel wsUrl={wsAddr} />
           </Box>
         </LeftPanel>
         <Box sx={{ padding: 2, flex: 1 }}>
