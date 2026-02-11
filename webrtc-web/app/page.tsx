@@ -22,7 +22,14 @@ import {
   IconButton,
   Paper,
 } from "@mui/material";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  RefObject,
+} from "react";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 
@@ -79,7 +86,7 @@ function MultipleInputAcceptor(props: {
 }
 
 function CandidateInputDialog(props: {
-  peerConnectionRef: React.RefObject<RTCPeerConnection | null>;
+  peerConnectionRef: RefObject<RTCPeerConnection | null>;
   open: boolean;
   onClose: () => void;
 }) {
