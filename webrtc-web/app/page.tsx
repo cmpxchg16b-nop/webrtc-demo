@@ -16,7 +16,7 @@ import {
   OfferDialog,
   RemoteDescriptionInputDialog,
 } from "@/components/InputDialog";
-import { Box, Button, Card, Chip } from "@mui/material";
+import { Box, Button, Card, Chip, MenuItem, Typography } from "@mui/material";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LeftPanel } from "@/components/LeftPanel";
 import { getConns } from "@/apis/conns";
@@ -183,7 +183,7 @@ function WSPanel(props: { wsUrl: string }) {
       <Box>
         {connected ? (
           <Box>
-            <Box>
+            <Box sx={{ padding: 2 }}>
               <Box>Basics Info</Box>
               <Box>
                 Connected to {wsRef?.current?.url} {nameDisplay}
@@ -215,12 +215,21 @@ function WSPanel(props: { wsUrl: string }) {
               </Box>
             </Box>
             <Box>
-              <Box>Peers</Box>
+              <Box sx={{ padding: 2 }}>Peers</Box>
               <Box>
                 {conns.map((conn) => (
-                  <Box key={conn.node_id}>
+                  <MenuItem key={conn.node_id} sx={{ overflow: "hidden" }}>
                     {conn.entry?.node_name || conn.node_id}
-                  </Box>
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      gutterBottom={false}
+                      marginLeft={1}
+                      noWrap
+                    >
+                      {conn.node_id}
+                    </Typography>
+                  </MenuItem>
                 ))}
               </Box>
             </Box>
@@ -343,7 +352,7 @@ export default function Home() {
     <Fragment>
       <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
         <LeftPanel>
-          <Box sx={{ padding: 2 }}>
+          <Box>
             <WSPanel wsUrl={wsAddr} />
           </Box>
         </LeftPanel>

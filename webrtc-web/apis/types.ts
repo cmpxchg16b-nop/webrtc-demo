@@ -98,5 +98,6 @@ export interface ConnRegistryData {
 
 export type ConnEntry = {
   node_id: string;
+  registered_at: number;
   entry: ConnRegistryData;
 };
