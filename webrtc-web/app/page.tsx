@@ -177,6 +177,7 @@ function WSPanel(props: { wsUrl: string }) {
     : undefined;
   const nameDisplay = name ? `as ${name}` : "";
   const [nameEdited, setNameEdited] = useState<string>("");
+  const [activeConn, setActiveConn] = useState("");
 
   return (
     <Fragment>
@@ -218,7 +219,14 @@ function WSPanel(props: { wsUrl: string }) {
               <Box sx={{ padding: 2 }}>Peers</Box>
               <Box>
                 {conns.map((conn) => (
-                  <MenuItem key={conn.node_id} sx={{ overflow: "hidden" }}>
+                  <MenuItem
+                    selected={activeConn === conn.node_id}
+                    onClick={() => {
+                      setActiveConn(conn.node_id);
+                    }}
+                    key={conn.node_id}
+                    sx={{ overflow: "hidden" }}
+                  >
                     {conn.entry?.node_name || conn.node_id}
                     <Typography
                       component="span"
