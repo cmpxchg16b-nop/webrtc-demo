@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -19,16 +18,20 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	fmt.Println("Hello, World!")
-
 	listenAddr := ":3001"
 	wsTimeout := 10 * time.Second
 	wsPath := "/ws"
 	sm := pkgsafemap.NewSafeMap()
 	cr := pkgconnreg.NewConnRegistry(sm)
 	wsHandler := pkghandler.NewWebsocketHandler(&upgrader, cr, wsTimeout)
+
+	var connsHandler http.Handler = pkghandler.NewConnsHandler(cr)
+	connsHandler = pkghandler.WithCORSAllowAny(connsHandler)
+
 	mux := http.NewServeMux()
 	mux.Handle(wsPath, wsHandler)
+
+	mux.Handle("/conns", connsHandler)
 	server := &http.Server{
 		Addr:    listenAddr,
 		Handler: mux,

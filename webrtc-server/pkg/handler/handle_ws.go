@@ -27,6 +27,32 @@ func NewWebsocketHandler(upgrader *websocket.Upgrader, cr *pkgconnreg.ConnRegist
 	}
 }
 
+func (handler *WebsocketHandler) sendBroadcastMsg(payload pkgframing.MessagePayload) error {
+	for key, connent := range handler.cr.Dump() {
+		if wsConn := connent.WSConn; wsConn != nil {
+			log.Printf("Broadcasting message to %s", key)
+			if err := handler.sendMsg(wsConn, payload, key); err != nil {
+				return fmt.Errorf("failed to send response message to %s: %v", key, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (handler *WebsocketHandler) sendMsg(conn *websocket.Conn, payload pkgframing.MessagePayload, key string) error {
+	responseJSON, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response payload for %s: %v", key, err)
+	}
+
+	err = conn.WriteMessage(websocket.TextMessage, responseJSON)
+	if err != nil {
+		return fmt.Errorf("failed to write response message to %s: %v", key, err)
+	}
+
+	return nil
+}
+
 func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.Conn, msg []byte) error {
 	cr := handler.cr
 	if cr == nil {
@@ -40,7 +66,15 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 	}
 
 	if payload.Register != nil {
-		cr.Register(key, *payload.Register, nil)
+		cr.Register(key, *payload.Register, nil, conn)
+		responsePayload := pkgframing.MessagePayload{
+			Online: &pkgconnreg.NodeGoesOnline{
+				NodeId: key,
+			},
+		}
+		if err := handler.sendBroadcastMsg(responsePayload); err != nil {
+			return fmt.Errorf("failed to send response message to %s: %v", key, err)
+		}
 	}
 	if payload.Echo != nil {
 		if payload.Echo.Direction == pkgconnreg.EchoDirectionC2S {
@@ -55,18 +89,29 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 				},
 				NodeId: key,
 			}
-			responseJSON, err := json.Marshal(responsePayload)
-			if err != nil {
-				return fmt.Errorf("failed to marshal response payload for %s: %v", key, err)
+			if err := handler.sendMsg(conn, responsePayload, key); err != nil {
+				return fmt.Errorf("failed to send response message to %s: %v", key, err)
 			}
-			err = conn.WriteMessage(websocket.TextMessage, responseJSON)
-			if err != nil {
-				return fmt.Errorf("failed to write response message to %s: %v", key, err)
-			}
+
 		}
 	}
 	if payload.AttributesAnnouncement != nil {
 		cr.SetAttributes(key, payload.AttributesAnnouncement)
+	}
+	if payload.Rename != nil {
+		originName, err := cr.Rename(key, *payload.Rename)
+		if err != nil {
+			return fmt.Errorf("failed to rename connection from %s: %v", key, err)
+		}
+		responsePayload := pkgframing.MessagePayload{
+			Rename: &pkgconnreg.RenamePayload{
+				OriginNodeName: originName,
+				NewNodeName:    payload.Rename.NewNodeName,
+			},
+		}
+		if err := handler.sendBroadcastMsg(responsePayload); err != nil {
+			return fmt.Errorf("failed to send response message to %s: %v", key, err)
+		}
 	}
 	return nil
 }

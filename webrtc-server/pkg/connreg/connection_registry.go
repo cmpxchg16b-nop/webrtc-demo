@@ -9,6 +9,7 @@ import (
 
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 	quicGo "github.com/quic-go/quic-go"
 )
 
@@ -23,6 +24,15 @@ const (
 	EchoDirectionC2S EchoDirection = "ping"
 	EchoDirectionS2C EchoDirection = "pong"
 )
+
+type NodeGoesOnline struct {
+	NodeId string `json:"node_id"`
+}
+
+type RenamePayload struct {
+	NewNodeName    string `json:"new_node_name"`
+	OriginNodeName string `json:"origin_node_name,omitempty"`
+}
 
 type EchoPayload struct {
 	Direction       EchoDirection `json:"direction"`
@@ -61,6 +71,7 @@ type ConnRegistryData struct {
 	LastHeartbeat  *uint64              `json:"last_heartbeat,omitempty"`
 	Attributes     ConnectionAttributes `json:"attributes,omitempty"`
 	QUICConn       *quicGo.Conn         `json:"-"`
+	WSConn         *websocket.Conn      `json:"-"`
 	Claims         jwt.MapClaims        `json:"-"`
 	Authentication AuthenticationType   `json:"authentication"`
 }
@@ -89,6 +100,9 @@ func cloneConnRegistryData(dataany interface{}) interface{} {
 	if data.QUICConn != nil {
 		cloned.QUICConn = data.QUICConn
 	}
+	if data.WSConn != nil {
+		cloned.WSConn = data.WSConn
+	}
 	return cloned
 }
 
@@ -110,7 +124,7 @@ func (cr *ConnRegistry) CloseConnection(key string) {
 	cr.datastore.Delete(key)
 }
 
-func (cr *ConnRegistry) Register(key string, payload RegisterPayload, claims jwt.MapClaims) error {
+func (cr *ConnRegistry) Register(key string, payload RegisterPayload, claims jwt.MapClaims, wsConn *websocket.Conn) error {
 	log.Printf("Registering connection from %s, node name: %s", key, payload.NodeName)
 
 	_, found := cr.datastore.Get(key, func(valany interface{}) error {
@@ -121,7 +135,7 @@ func (cr *ConnRegistry) Register(key string, payload RegisterPayload, claims jwt
 		}
 		entry.NodeName = &payload.NodeName
 		entry.RegisteredAt = &now
-
+		entry.WSConn = wsConn
 		if claims != nil {
 			entry.Claims = claims
 			entry.Authentication = AuthenticationTypeJWT
@@ -151,6 +165,21 @@ func (cr *ConnRegistry) UpdateHeartbeat(key string) error {
 		return fmt.Errorf("connection from %s not found in registry", key)
 	}
 	return nil
+}
+
+func (cr *ConnRegistry) Rename(key string, payload RenamePayload) (string, error) {
+	var originName *string = new(string)
+	*originName = ""
+	_, found := cr.datastore.Get(key, func(valany interface{}) error {
+		entry := valany.(*ConnRegistryData)
+		*originName = *entry.NodeName
+		entry.NodeName = &payload.NewNodeName
+		return nil
+	})
+	if !found {
+		return "", fmt.Errorf("connection from %s not found in registry", key)
+	}
+	return *originName, nil
 }
 
 func (cr *ConnRegistry) SetAttributes(connkey string, announcement *AttributesAnnouncementPayload) error {

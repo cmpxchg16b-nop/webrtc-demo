@@ -10,6 +10,8 @@ export interface MessagePayload {
   node_id?: string;
   register?: RegisterPayload;
   echo?: EchoPayload;
+  online?: any;
+  rename?: any;
   attributes_announcement?: AttributesAnnouncementPayload;
 }
 
@@ -54,4 +56,33 @@ export interface EchoPayload {
 export interface AttributesAnnouncementPayload {
   attributes?: ConnectionAttributes;
   withdrawals?: string[];
+}
+
+// type AuthenticationType string
+// const (
+// 	AuthenticationTypeJWT  AuthenticationType = "jwt"
+// 	AuthenticationTypeMTLS AuthenticationType = "mtls"
+// )
+export type AuthenticationType = "jwt" | "mtls";
+
+export const AuthenticationTypeJWT = "jwt" as const;
+export const AuthenticationTypeMTLS = "mtls" as const;
+
+// type ConnRegistryData struct {
+// 	NodeName       *string              `json:"node_name,omitempty"`
+// 	ConnectedAt    uint64               `json:"connected_at"`
+// 	RegisteredAt   *uint64              `json:"registered_at,omitempty"`
+// 	LastHeartbeat  *uint64              `json:"last_heartbeat,omitempty"`
+// 	Attributes     ConnectionAttributes `json:"attributes,omitempty"`
+// 	QUICConn       *quicGo.Conn         `json:"-"`
+// 	Claims         jwt.MapClaims        `json:"-"`
+// 	Authentication AuthenticationType   `json:"authentication"`
+// }
+export interface ConnRegistryData {
+  node_name?: string;
+  connected_at: number;
+  registered_at?: number;
+  last_heartbeat?: number;
+  attributes?: ConnectionAttributes;
+  authentication: AuthenticationType;
 }

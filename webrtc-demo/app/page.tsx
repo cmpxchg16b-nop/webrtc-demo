@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ConnRegistryData,
   EchoDirectionC2S,
   EchoDirectionS2C,
   MessagePayload,
@@ -308,6 +309,29 @@ function AnswerDialog(props: {
 
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
+const getEntriesDelayMs = 500;
+const apiEndpoint = "http://localhost:3001";
+
+type ConnEntry = {
+  node_id: string;
+  entry: ConnRegistryData;
+};
+
+function getConns() {
+  return fetch(`${apiEndpoint}/conns`)
+    .then((r) => r.json())
+    .then((r) => r as Record<string, ConnRegistryData>)
+    .then((r) => {
+      const entries: ConnEntry[] = [];
+      return Object.entries(r).map(
+        ([nodeId, entry]) =>
+          ({
+            node_id: nodeId,
+            entry: entry,
+          }) as ConnEntry,
+      );
+    });
+}
 
 function WSPanel(props: {
   wsUrl: string;
@@ -328,13 +352,13 @@ function WSPanel(props: {
   const [lastSeq, setLastSeq] = useState<number | undefined>(undefined);
   const connectedAtRef = useRef<number | undefined>(undefined);
   const [upTime, setUpTime] = useState<number | undefined>(undefined);
+  const pingTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const [conns, setConns] = useState<ConnEntry[]>([]);
 
   const doConnect = (addr: string) => {
     setConnecting(true);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
-
-    let it: ReturnType<typeof setInterval> | undefined = undefined;
 
     ws.onopen = () => {
       connectedAtRef.current = Date.now();
@@ -349,7 +373,7 @@ function WSPanel(props: {
       };
       ws.send(JSON.stringify(registerMsg));
 
-      it = setInterval(() => {
+      pingTimerRef.current = setInterval(() => {
         const seq = seqRef.current ?? 0;
         const echoMsg: MessagePayload = {
           echo: {
@@ -366,13 +390,21 @@ function WSPanel(props: {
         ws.send(JSON.stringify(echoMsg));
       }, pingIntvMs);
     };
-    ws.onclose = () => {
+    const cleanUp = () => {
       setConnected(false);
       setConnecting(false);
+      setConns([]);
+      if (pingTimerRef.current) {
+        clearInterval(pingTimerRef.current);
+        pingTimerRef.current = undefined;
+      }
+    };
+    ws.onclose = () => {
+      cleanUp();
     };
     ws.onerror = (error) => {
       console.error("[dbg] ws error", error);
-      setConnecting(false);
+      cleanUp();
     };
     ws.onmessage = (event) => {
       try {
@@ -394,7 +426,18 @@ function WSPanel(props: {
               const upTime = now - (connectedAt ?? 0);
               setUpTime(upTime);
             }
+
+            if (echo.seq_id === 0) {
+              getConns().then((conns) => {
+                setConns(conns);
+              });
+            }
           }
+        }
+        if (msg.online) {
+          getConns().then((conns) => {
+            setConns(conns);
+          });
         }
       } catch (e) {
         console.error("[dbg] ws message error", e);
@@ -408,31 +451,44 @@ function WSPanel(props: {
         {connected ? (
           <Box>
             <Box>
-              Connected to {wsRef?.current?.url} as {myName}
-            </Box>
-            {nodeId && <Box>NodeId: {nodeId}</Box>}
-
-            {rtt !== undefined && <Box>RTT: {rtt}ms</Box>}
-            {lastSeq !== undefined && <Box>Last Seq: {lastSeq}</Box>}
-            {upTime !== undefined && (
+              <Box>Basics Info</Box>
               <Box>
-                Up Time:{" "}
-                {(upTime / 1000)
-                  .toFixed(3)
-                  .replace(/0+$/, "")
-                  .replace(/\.$/, "")}
-                s
+                Connected to {wsRef?.current?.url} as {myName}
               </Box>
-            )}
+              {nodeId && <Box>NodeId: {nodeId}</Box>}
 
+              {rtt !== undefined && <Box>RTT: {rtt}ms</Box>}
+              {lastSeq !== undefined && <Box>Last Seq: {lastSeq}</Box>}
+              {upTime !== undefined && (
+                <Box>
+                  Up Time:{" "}
+                  {(upTime / 1000)
+                    .toFixed(3)
+                    .replace(/0+$/, "")
+                    .replace(/\.$/, "")}
+                  s
+                </Box>
+              )}
+
+              <Box>
+                <Button
+                  onClick={() => {
+                    setShowChangeName(true);
+                  }}
+                >
+                  Change Name
+                </Button>
+              </Box>
+            </Box>
             <Box>
-              <Button
-                onClick={() => {
-                  setShowChangeName(true);
-                }}
-              >
-                Change Name
-              </Button>
+              <Box>Peers</Box>
+              <Box>
+                {conns.map((conn) => (
+                  <Box key={conn.node_id}>
+                    {conn.entry?.node_name || conn.node_id}
+                  </Box>
+                ))}
+              </Box>
             </Box>
           </Box>
         ) : (
@@ -453,7 +509,7 @@ function WSPanel(props: {
 }
 
 function LeftPanel(props: { initW?: number; children: React.ReactNode }) {
-  const { initW = 360, children } = props;
+  const { initW = 420, children } = props;
   const [width, setWidth] = useState(initW);
   return (
     <Box sx={{ width: `${width}px`, height: "100%", position: "relative" }}>
