@@ -17,6 +17,7 @@ type WebsocketHandler struct {
 	upgrader *websocket.Upgrader
 	cr       *pkgconnreg.ConnRegistry
 	timeout  time.Duration
+	counter  int
 }
 
 func NewWebsocketHandler(upgrader *websocket.Upgrader, cr *pkgconnreg.ConnRegistry, timeout time.Duration) *WebsocketHandler {
@@ -53,7 +54,11 @@ func (handler *WebsocketHandler) sendMsg(conn *websocket.Conn, payload pkgframin
 	return nil
 }
 
-func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.Conn, msg []byte) error {
+func (handler *WebsocketHandler) getDefaultUserName(numId int) string {
+	return fmt.Sprintf("user%04d", numId)
+}
+
+func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.Conn, msg []byte, numId int) error {
 	cr := handler.cr
 	if cr == nil {
 		return fmt.Errorf("connection registry is not set")
@@ -66,6 +71,9 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 	}
 
 	if payload.Register != nil {
+		if payload.Register.NodeName == "" {
+			payload.Register.NodeName = handler.getDefaultUserName(numId)
+		}
 		cr.Register(key, *payload.Register, nil, conn)
 		responsePayload := pkgframing.MessagePayload{
 			Online: &pkgconnreg.NodeGoesOnline{
@@ -73,6 +81,13 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 			},
 		}
 		if err := handler.sendBroadcastMsg(responsePayload); err != nil {
+			return fmt.Errorf("failed to send response message to %s: %v", key, err)
+		}
+		responsePayload = pkgframing.MessagePayload{
+			Register: payload.Register,
+			NodeId:   key,
+		}
+		if err := handler.sendMsg(conn, responsePayload, key); err != nil {
 			return fmt.Errorf("failed to send response message to %s: %v", key, err)
 		}
 	}
@@ -126,7 +141,7 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	remoteKey := uuid.New().String()
-	cr.OpenConnection(remoteKey, nil)
+	numId := cr.OpenConnection(remoteKey, nil)
 	log.Printf("Connection opened for %s, total connections: %d", remoteKey, cr.Count())
 
 	defer func() {
@@ -163,7 +178,7 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			switch msgType {
 			case websocket.TextMessage:
-				if err := h.handleTextMessage(remoteKey, conn, msg); err != nil {
+				if err := h.handleTextMessage(remoteKey, conn, msg, numId); err != nil {
 					log.Printf("Failed to handle text message from %s: %v", remoteKey, err)
 					continue
 				}

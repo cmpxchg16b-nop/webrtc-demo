@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
@@ -107,10 +108,21 @@ func cloneConnRegistryData(dataany interface{}) interface{} {
 }
 
 type ConnRegistry struct {
-	datastore pkgsafemap.DataStore
+	datastore    pkgsafemap.DataStore
+	counter      int
+	counterMutex sync.Mutex
 }
 
-func (cr *ConnRegistry) OpenConnection(key string, quicConn *quicGo.Conn) {
+func (cr *ConnRegistry) IncrementCounter() int {
+	cr.counterMutex.Lock()
+	defer cr.counterMutex.Unlock()
+	numId := cr.counter
+	cr.counter++
+	return numId
+}
+
+func (cr *ConnRegistry) OpenConnection(key string, quicConn *quicGo.Conn) int {
+	numId := cr.IncrementCounter()
 	now := uint64(time.Now().Unix())
 	connRegData := &ConnRegistryData{
 		ConnectedAt: now,
@@ -118,6 +130,7 @@ func (cr *ConnRegistry) OpenConnection(key string, quicConn *quicGo.Conn) {
 		QUICConn:    quicConn,
 	}
 	cr.datastore.Set(key, connRegData)
+	return numId
 }
 
 func (cr *ConnRegistry) CloseConnection(key string) {

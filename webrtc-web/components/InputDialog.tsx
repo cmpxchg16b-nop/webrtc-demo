@@ -244,10 +244,12 @@ export function ChangeNameDialog(props: {
   onNameChange: (name: string) => void;
   open: boolean;
   onClose: () => void;
+  onConfirm: (name: string) => Promise<void>;
 }) {
-  const { name, onNameChange, open, onClose } = props;
+  const { name, onNameChange, open, onClose, onConfirm } = props;
+  const [waiting, setWaiting] = useState(false);
   return (
-    <Dialog maxWidth="md" fullWidth open={open} onClose={onClose}>
+    <Dialog maxWidth="sm" fullWidth open={open} onClose={onClose}>
       <DialogTitle>Change Name</DialogTitle>
       <DialogContent>
         <TextField
@@ -268,9 +270,13 @@ export function ChangeNameDialog(props: {
             Cancel
           </Button>
           <Button
+            loading={waiting}
             variant="contained"
             onClick={() => {
-              onNameChange(name);
+              setWaiting(true);
+              onConfirm(name).finally(() => {
+                setWaiting(false);
+              });
             }}
           >
             Confirm

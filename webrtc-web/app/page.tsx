@@ -6,6 +6,7 @@ import {
   EchoDirectionS2C,
   MessagePayload,
   RegisterPayload,
+  RenamePayload,
 } from "@/apis/types";
 import {
   AnswerDialog,
@@ -40,7 +41,11 @@ function useWs() {
   const [upTime, setUpTime] = useState<number | undefined>(undefined);
   const pingTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [conns, setConns] = useState<ConnEntry[]>([]);
-  const [name, setName] = useState<string>("");
+
+  const doRefresh = () =>
+    getConns().then((conns) => {
+      setConns(conns);
+    });
 
   const doConnect = (addr: string) => {
     setConnecting(true);
@@ -122,9 +127,13 @@ function useWs() {
           }
         }
         if (msg.online) {
-          getConns().then((conns) => {
-            setConns(conns);
-          });
+          doRefresh();
+        }
+        if (msg.register) {
+          doRefresh();
+        }
+        if (msg.rename) {
+          doRefresh();
         }
       } catch (e) {
         console.error("[dbg] ws message error", e);
@@ -142,7 +151,6 @@ function useWs() {
     connecting,
     wsRef,
     doConnect,
-    name,
   };
 }
 
@@ -156,7 +164,7 @@ function WSPanel(props: { wsUrl: string }) {
     lastSeq,
     upTime,
     nodeId,
-    name,
+
     conns,
     connected,
     connecting,
@@ -164,6 +172,9 @@ function WSPanel(props: { wsUrl: string }) {
     doConnect,
   } = useWs();
 
+  const name = conns
+    ? conns.find((conn) => conn.node_id === nodeId)?.entry?.node_name
+    : undefined;
   const nameDisplay = name ? `as ${name}` : "";
   const [nameEdited, setNameEdited] = useState<string>("");
 
@@ -195,7 +206,7 @@ function WSPanel(props: { wsUrl: string }) {
               <Box>
                 <Button
                   onClick={() => {
-                    setNameEdited(name);
+                    setNameEdited(name ?? "");
                     setShowChangeName(true);
                   }}
                 >
@@ -235,6 +246,21 @@ function WSPanel(props: { wsUrl: string }) {
         open={showChangeName}
         onClose={() => {
           setShowChangeName(false);
+        }}
+        onConfirm={(newName) => {
+          return new Promise((resolve) => {
+            const renamePayload: RenamePayload = {
+              new_node_name: newName,
+              origin_node_name: name,
+            };
+            const renameMsg: MessagePayload = {
+              rename: renamePayload,
+            };
+            wsRef.current?.send(JSON.stringify(renameMsg));
+
+            resolve();
+            setShowChangeName(false);
+          });
         }}
       />
     </Fragment>

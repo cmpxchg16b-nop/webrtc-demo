@@ -1,6 +1,15 @@
 // type ConnectionAttributes map[string]string
 export type ConnectionAttributes = Record<string, string>;
 
+// type RenamePayload struct {
+// 	NewNodeName    string `json:"new_node_name"`
+// 	OriginNodeName string `json:"origin_node_name,omitempty"`
+// }
+export interface RenamePayload {
+  new_node_name: string;
+  origin_node_name?: string;
+}
+
 // type MessagePayload struct {
 //  	Register               *pkgconnreg.RegisterPayload               `json:"register,omitempty"`
 //  	Echo                   *pkgconnreg.EchoPayload                   `json:"echo,omitempty"`
@@ -11,7 +20,7 @@ export interface MessagePayload {
   register?: RegisterPayload;
   echo?: EchoPayload;
   online?: any;
-  rename?: any;
+  rename?: RenamePayload;
   attributes_announcement?: AttributesAnnouncementPayload;
 }
 
