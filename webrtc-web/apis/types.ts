@@ -138,3 +138,30 @@ export interface ICEOfferPayload {
   from_node_id: string;
   to_node_id: string;
 }
+
+export type ChatMessage = {
+  // message uuid, globally unique, to prevent a message from being queued multiple times.
+  messageId: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  message: string;
+  messageMIME?: string;
+  timestamp: number;
+};
+
+export type ConnTrackStatusEntry = {
+  // todo
+  disconnected?: boolean;
+  connecting?: boolean;
+  messages?: ChatMessage[];
+};
+
+// key is the node_id of remote peer
+export type ConnTrackStatus = Record<string, ConnTrackStatusEntry>;
+
+export type ConnTrackEntry = {
+  peerConnection: RTCPeerConnection;
+  remoteOffers: RTCSessionDescriptionInit[];
+  queuedICEOffers: RTCIceCandidateInit[];
+  dataChannel?: RTCDataChannel | null;
+};

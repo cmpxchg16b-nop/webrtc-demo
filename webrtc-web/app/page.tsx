@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  ChatMessage,
   ConnEntry,
+  ConnTrackEntry,
+  ConnTrackStatus,
   EchoDirectionC2S,
   EchoDirectionS2C,
   ICEOfferPayload,
@@ -11,15 +14,8 @@ import {
   RenamePayload,
   SDPOfferPayload,
 } from "@/apis/types";
-import {
-  AnswerDialog,
-  CandidateInputDialog,
-  ChangeNameDialog,
-  LocalDescriptionInputDialog,
-  OfferDialog,
-  RemoteDescriptionInputDialog,
-} from "@/components/InputDialog";
-import { Box, Button, MenuItem, Typography } from "@mui/material";
+import { ChangeNameDialog } from "@/components/InputDialog";
+import { Box, Button, TextField } from "@mui/material";
 import {
   Dispatch,
   Fragment,
@@ -31,39 +27,14 @@ import {
 } from "react";
 import { LeftPanel } from "@/components/LeftPanel";
 import { getConns } from "@/apis/conns";
-import { RenderICECandidate } from "@/components/RenderICECandidate";
 import { BasicWsInfo } from "@/components/BasicWsInfo";
 import { RenderPeerEntry } from "@/components/RenderPeerEntry";
+import { RenderMessage } from "@/components/RenderMessage";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
-
-type ChatMessage = {
-  // message uuid, globally unique, to prevent a message from being queued multiple times.
-  messageId: string;
-  fromNodeId?: string;
-  toNodeId?: string;
-  message: string;
-  messageMIME?: string;
-  timestamp: number;
-};
-type ConnTrackStatusEntry = {
-  // todo
-  disconnected?: boolean;
-  connecting?: boolean;
-  messages?: ChatMessage[];
-};
-// key is the node_id of remote peer
-type ConnTrackStatus = Record<string, ConnTrackStatusEntry>;
-
-type ConnTrackEntry = {
-  peerConnection: RTCPeerConnection;
-  remoteOffers: RTCSessionDescriptionInit[];
-  queuedICEOffers: RTCIceCandidateInit[];
-  dataChannel?: RTCDataChannel | null;
-};
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -254,6 +225,7 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
                     remoteNodeId,
                     answerOffer,
                   );
+                  entry.peerConnection.setLocalDescription(answerOffer);
                   const answerPayload: SDPOfferPayload = {
                     type: OfferType.Answer,
                     offer_json: JSON.stringify(answerOffer),
@@ -408,8 +380,6 @@ function attachDCEventListeners(
     } catch (e) {
       console.error("failed to parse data channel message", e);
     }
-
-    console.log(`[dbg]${logSource} data channel message`, event.data, dc);
   };
 }
 
@@ -548,18 +518,6 @@ function attachPeerConnectionEventListeners(
 }
 
 export default function Home() {
-  const [candidates, setCandidates] = useState<RTCIceCandidate[]>([]);
-  const [addCandidateDlgOpen, setAddCandidateDlgOpen] = useState(false);
-  const [setRemoteDescriptionDlgOpen, setSetRemoteDescriptionDlgOpen] =
-    useState(false);
-  const [setLocalDescriptionDlgOpen, setSetLocalDescriptionDlgOpen] =
-    useState(false);
-  const [offerDlgOpen, setOfferDlgOpen] = useState(false);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const [showAnswerDlg, setShowAnswerDlg] = useState<boolean>(false);
-
-  // todo: display it in GUI
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
   console.log("[dbg] connTrackStatus", connTrackStatus);
 
@@ -610,7 +568,7 @@ export default function Home() {
       const dc = ent.peerConnection.createDataChannel("dc1");
       ent.dataChannel = dc;
 
-      attachDCEventListeners(dc, setConnTrackStatus, logSource);
+      attachDCEventListeners(dc, setConnTrackStatus, remoteNodeId, logSource);
 
       console.log(
         `[dbg] [${logSource}] creating SDP offer to remote peer`,
@@ -634,6 +592,7 @@ export default function Home() {
           const offerMsg: MessagePayload = {
             sdp_offer: offerPayload,
           };
+          ent.peerConnection.setLocalDescription(offer);
           wsRef.current?.send(JSON.stringify(offerMsg));
         })
         .catch((e) => {
@@ -645,6 +604,10 @@ export default function Home() {
         });
     }
   };
+
+  const [messageInput, setMessageInput] = useState<string>("");
+
+  const messages: ChatMessage[] = connTrackStatus[activeConn]?.messages ?? [];
 
   return (
     <Fragment>
@@ -669,14 +632,16 @@ export default function Home() {
                   <Box>
                     <Box sx={{ padding: 2 }}>Peers</Box>
                     <Box>
-                      {conns.map((conn) => (
-                        <RenderPeerEntry
-                          conn={conn}
-                          key={conn.node_id}
-                          activeNodeId={activeConn}
-                          onSelect={() => switchActiveConn(conn.node_id)}
-                        />
-                      ))}
+                      {conns
+                        .filter((conn) => conn.node_id !== nodeId)
+                        .map((conn) => (
+                          <RenderPeerEntry
+                            conn={conn}
+                            key={conn.node_id}
+                            activeNodeId={activeConn}
+                            onSelect={() => switchActiveConn(conn.node_id)}
+                          />
+                        ))}
                     </Box>
                   </Box>
                 </Box>
@@ -695,23 +660,47 @@ export default function Home() {
             </Box>
           </Box>
         </LeftPanel>
-        <Box
-          sx={{
-            padding: 2,
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-          }}
-        >
-          {candidates
-            .filter((candidate) => !!candidate.address)
-            .map((candidate) => (
-              <RenderICECandidate
-                candidate={candidate}
-                key={`addr=${candidate.address},type=${candidate.type},protocol=${candidate.protocol}`}
-              />
+        <Box sx={{ flex: 1, padding: 2 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+            }}
+          >
+            {messages.map((message) => (
+              <RenderMessage message={message} key={message.messageId} />
             ))}
+          </Box>
+          <Box>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+            />
+            <Button
+              onClick={() => {
+                const msgTxt = messageInput;
+
+                const msgObject: ChatMessage = {
+                  messageId: crypto.randomUUID(),
+                  fromNodeId: nodeIdRef.current,
+                  toNodeId: activeConn,
+                  message: msgTxt,
+                  timestamp: Date.now(),
+                };
+                connTrackRef.current[activeConn]?.dataChannel?.send(
+                  JSON.stringify(msgObject),
+                );
+
+                setMessageInput("");
+              }}
+            >
+              Send
+            </Button>
+          </Box>
         </Box>
       </Box>
       <ChangeNameDialog
