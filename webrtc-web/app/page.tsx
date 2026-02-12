@@ -15,7 +15,7 @@ import {
   SDPOfferPayload,
 } from "@/apis/types";
 import { ChangeNameDialog } from "@/components/InputDialog";
-import { Box, Button, TextField } from "@mui/material";
+import { Box, Button } from "@mui/material";
 import {
   Dispatch,
   Fragment,
@@ -30,6 +30,7 @@ import { getConns } from "@/apis/conns";
 import { BasicWsInfo } from "@/components/BasicWsInfo";
 import { RenderPeerEntry } from "@/components/RenderPeerEntry";
 import { RenderMessage } from "@/components/RenderMessage";
+import { MessageComposer } from "@/components/MessageComposer";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 
@@ -660,7 +661,14 @@ export default function Home() {
             </Box>
           </Box>
         </LeftPanel>
-        <Box sx={{ flex: 1, padding: 2 }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
           <Box
             sx={{
               display: "flex",
@@ -672,35 +680,18 @@ export default function Home() {
               <RenderMessage message={message} key={message.messageId} />
             ))}
           </Box>
-          <Box>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-            />
-            <Button
-              onClick={() => {
-                const msgTxt = messageInput;
-
-                const msgObject: ChatMessage = {
-                  messageId: crypto.randomUUID(),
-                  fromNodeId: nodeIdRef.current,
-                  toNodeId: activeConn,
-                  message: msgTxt,
-                  timestamp: Date.now(),
-                };
-                connTrackRef.current[activeConn]?.dataChannel?.send(
-                  JSON.stringify(msgObject),
-                );
-
-                setMessageInput("");
-              }}
-            >
-              Send
-            </Button>
-          </Box>
+          <MessageComposer
+            onMessage={(msgObject) => {
+              msgObject = {
+                ...msgObject,
+                fromNodeId: nodeIdRef.current,
+                toNodeId: activeConn,
+              };
+              connTrackRef.current[activeConn]?.dataChannel?.send(
+                JSON.stringify(msgObject),
+              );
+            }}
+          />
         </Box>
       </Box>
       <ChangeNameDialog
