@@ -19,29 +19,42 @@ import {
   OfferDialog,
   RemoteDescriptionInputDialog,
 } from "@/components/InputDialog";
-import { Box, Button, Card, Chip, MenuItem, Typography } from "@mui/material";
+import { Box, Button, MenuItem, Typography } from "@mui/material";
 import {
   Dispatch,
   Fragment,
   SetStateAction,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { LeftPanel } from "@/components/LeftPanel";
 import { getConns } from "@/apis/conns";
+import { RenderICECandidate } from "@/components/RenderICECandidate";
+import { BasicWsInfo } from "@/components/BasicWsInfo";
+import { RenderPeerEntry } from "@/components/RenderPeerEntry";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
 
+type ChatMessage = {
+  // message uuid, globally unique, to prevent a message from being queued multiple times.
+  messageId: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  message: string;
+  messageMIME?: string;
+  timestamp: number;
+};
 type ConnTrackStatusEntry = {
   // todo
   disconnected?: boolean;
   connecting?: boolean;
+  messages?: ChatMessage[];
 };
+// key is the node_id of remote peer
 type ConnTrackStatus = Record<string, ConnTrackStatusEntry>;
 
 type ConnTrackEntry = {
@@ -344,7 +357,42 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
                 console.error("[dbg] data channel error", error);
               };
               dc.onmessage = (event) => {
-                console.log("[dbg] data channel message", event.data, dc);
+                console.log(
+                  "[dbg] [onacceptor] data channel message",
+                  event.data,
+                  dc,
+                );
+                try {
+                  const msgObject: ChatMessage = JSON.parse(event.data);
+                  setConnTrackStatus((prev) => {
+                    const theEntry = prev[remoteNodeId]
+                      ? { ...prev[remoteNodeId] }
+                      : {};
+                    const messages = theEntry.messages
+                      ? [...theEntry.messages]
+                      : [];
+                    const idx = messages.findIndex(
+                      (msg) => msg.messageId === msgObject.messageId,
+                    );
+                    if (idx === -1) {
+                      messages.push(msgObject);
+                    } else {
+                      console.log(
+                        "[dbg] [onacceptor]",
+                        "message",
+                        msgObject,
+                        "is already in the queue, skipping",
+                      );
+                    }
+                    theEntry.messages = messages;
+                    return {
+                      ...prev,
+                      [remoteNodeId]: theEntry,
+                    };
+                  });
+                } catch (e) {
+                  console.error("failed to parse data channel message", e);
+                }
               };
             };
           }
@@ -472,10 +520,17 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
   };
 }
 
-function WSPanel(props: { wsUrl: string }) {
-  const { wsUrl } = props;
-
-  const [showChangeName, setShowChangeName] = useState(false);
+export default function Home() {
+  const [candidates, setCandidates] = useState<RTCIceCandidate[]>([]);
+  const [addCandidateDlgOpen, setAddCandidateDlgOpen] = useState(false);
+  const [setRemoteDescriptionDlgOpen, setSetRemoteDescriptionDlgOpen] =
+    useState(false);
+  const [setLocalDescriptionDlgOpen, setSetLocalDescriptionDlgOpen] =
+    useState(false);
+  const [offerDlgOpen, setOfferDlgOpen] = useState(false);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const [showAnswerDlg, setShowAnswerDlg] = useState<boolean>(false);
 
   // todo: display it in GUI
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
@@ -501,6 +556,7 @@ function WSPanel(props: { wsUrl: string }) {
   const nameDisplay = name ? `as ${name}` : "";
   const [nameEdited, setNameEdited] = useState<string>("");
   const [activeConn, setActiveConn] = useState("");
+  const [showChangeName, setShowChangeName] = useState(false);
   const switchActiveConn = (remoteNodeId: string) => {
     setActiveConn(remoteNodeId);
 
@@ -636,24 +692,6 @@ function WSPanel(props: { wsUrl: string }) {
         }
       };
 
-      ent.peerConnection.ondatachannel = (event) => {
-        console.log("[dbg] [src1] [active] on data channel", event);
-        const dc = event.channel;
-        ent.dataChannel = dc;
-        dc.onopen = () => {
-          console.log("[dbg] [src1] data channel opened", dc);
-        };
-        dc.onclose = () => {
-          console.log("[dbg] [src1] data channel closed", dc);
-        };
-        dc.onerror = (error) => {
-          console.error("[dbg] [src1] data channel error", error);
-        };
-        dc.onmessage = (event) => {
-          console.log("[dbg] [src1] data channel message", event.data, dc);
-        };
-      };
-
       const dc = ent.peerConnection.createDataChannel("dc1");
       ent.dataChannel = dc;
       dc.onopen = () => {
@@ -666,6 +704,37 @@ function WSPanel(props: { wsUrl: string }) {
         console.error("[dbg] [src2] data channel error", error);
       };
       dc.onmessage = (event) => {
+        console.log("[dbg] [src2] data channel message", event.data, dc);
+        try {
+          const msgObject: ChatMessage = JSON.parse(event.data);
+          setConnTrackStatus((prev) => {
+            const theEntry = prev[remoteNodeId]
+              ? { ...prev[remoteNodeId] }
+              : {};
+            const messages = theEntry.messages ? [...theEntry.messages] : [];
+            const idx = messages.findIndex(
+              (msg) => msg.messageId === msgObject.messageId,
+            );
+            if (idx === -1) {
+              messages.push(msgObject);
+            } else {
+              console.log(
+                "[dbg] [src2]",
+                "message",
+                msgObject,
+                "is already in the queue, skipping",
+              );
+            }
+            theEntry.messages = messages;
+            return {
+              ...prev,
+              [remoteNodeId]: theEntry,
+            };
+          });
+        } catch (e) {
+          console.error("failed to parse data channel message", e);
+        }
+
         console.log("[dbg] [src2] data channel message", event.data, dc);
       };
       console.log("[dbg] [src2] creating offer to remote peer", remoteNodeId);
@@ -701,234 +770,97 @@ function WSPanel(props: { wsUrl: string }) {
 
   return (
     <Fragment>
-      <Box>
-        {connected ? (
-          <Box>
-            <Box sx={{ padding: 2 }}>
-              <Box>Basics Info</Box>
-              <Box>
-                Connected to {wsRef?.current?.url} {nameDisplay}
-              </Box>
-              {nodeId && <Box>NodeId: {nodeId}</Box>}
-
-              {rtt !== undefined && <Box>RTT: {rtt}ms</Box>}
-              {lastSeq !== undefined && <Box>Last Seq: {lastSeq}</Box>}
-              {upTime !== undefined && (
-                <Box>
-                  Up Time:{" "}
-                  {(upTime / 1000)
-                    .toFixed(3)
-                    .replace(/0+$/, "")
-                    .replace(/\.$/, "")}
-                  s
-                </Box>
-              )}
-
-              <Box>
-                <Button
-                  onClick={() => {
-                    setNameEdited(name ?? "");
-                    setShowChangeName(true);
-                  }}
-                >
-                  Change Name
-                </Button>
-              </Box>
-            </Box>
-            <Box>
-              <Box sx={{ padding: 2 }}>Peers</Box>
-              <Box>
-                {conns.map((conn) => (
-                  <MenuItem
-                    selected={activeConn === conn.node_id}
-                    onClick={() => {
-                      switchActiveConn(conn.node_id);
-                    }}
-                    key={conn.node_id}
-                    sx={{ overflow: "hidden" }}
-                  >
-                    {conn.entry?.node_name || conn.node_id}
-                    <Typography
-                      component="span"
-                      variant="body2"
-                      gutterBottom={false}
-                      marginLeft={1}
-                      noWrap
-                    >
-                      {conn.node_id}
-                    </Typography>
-                  </MenuItem>
-                ))}
-              </Box>
-            </Box>
-          </Box>
-        ) : (
-          <Box>
-            <Button
-              loading={connecting}
-              onClick={() => {
-                doConnect(wsUrl);
-              }}
-            >
-              Connect
-            </Button>
-          </Box>
-        )}
-      </Box>
-      <ChangeNameDialog
-        name={nameEdited}
-        onNameChange={(name) => {
-          setNameEdited(name);
-        }}
-        open={showChangeName}
-        onClose={() => {
-          setShowChangeName(false);
-        }}
-        onConfirm={(newName) => {
-          return new Promise((resolve) => {
-            const renamePayload: RenamePayload = {
-              new_node_name: newName,
-              origin_node_name: name,
-            };
-            const renameMsg: MessagePayload = {
-              rename: renamePayload,
-            };
-            wsRef.current?.send(JSON.stringify(renameMsg));
-
-            resolve();
-            setShowChangeName(false);
-          });
-        }}
-      />
-    </Fragment>
-  );
-}
-
-export default function Home() {
-  const [candidates, setCandidates] = useState<RTCIceCandidate[]>([]);
-  const [addCandidateDlgOpen, setAddCandidateDlgOpen] = useState(false);
-  const [setRemoteDescriptionDlgOpen, setSetRemoteDescriptionDlgOpen] =
-    useState(false);
-  const [setLocalDescriptionDlgOpen, setSetLocalDescriptionDlgOpen] =
-    useState(false);
-  const [offerDlgOpen, setOfferDlgOpen] = useState(false);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const [showAnswerDlg, setShowAnswerDlg] = useState<boolean>(false);
-
-  return (
-    <Fragment>
       <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
         <LeftPanel>
           <Box>
-            <WSPanel wsUrl={wsAddr} />
-          </Box>
-        </LeftPanel>
-        <Box sx={{ padding: 2, flex: 1 }}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              gap: 1,
-              flexWrap: "wrap",
-            }}
-          >
-            <Button
-              onClick={() => {
-                setSetRemoteDescriptionDlgOpen(true);
-              }}
-            >
-              Set Remote Description
-            </Button>
-            <Button
-              onClick={() => {
-                setSetLocalDescriptionDlgOpen(true);
-              }}
-            >
-              Set Local Description
-            </Button>
-            <Button
-              onClick={() => {
-                setAddCandidateDlgOpen(true);
-              }}
-            >
-              Add Candidate
-            </Button>
-            <Button
-              onClick={() => {
-                setOfferDlgOpen(true);
-              }}
-            >
-              Offer
-            </Button>
-            <Button
-              onClick={() => {
-                setShowAnswerDlg(true);
-              }}
-            >
-              Answer
-            </Button>
-          </Box>
-          <Box
-            sx={{
-              marginTop: 2,
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1,
-                flexShrink: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-              }}
-            >
-              {candidates
-                .filter((candidate) => !!candidate.address)
-                .map((candidate) => (
-                  <Card
-                    sx={{
-                      padding: 2,
-                      display: "flex",
-                      flexDirection: "row",
-                      gap: 1,
-                      flexWrap: "wrap",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                    key={`addr=${candidate.address},type=${candidate.type},protocol=${candidate.protocol}`}
-                  >
+            <Fragment>
+              <Box>
+                {connected ? (
+                  <Box>
+                    <BasicWsInfo
+                      name={name}
+                      url={wsRef?.current?.url}
+                      rtt={rtt}
+                      nodeId={nodeId}
+                      lastSeq={lastSeq}
+                      upTime={upTime}
+                      onNameChangeRequested={() => {
+                        setNameEdited(name ?? "");
+                        setShowChangeName(true);
+                      }}
+                    />
                     <Box>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexDirection: "row",
-                          gap: 1,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Chip label={`Type: ${candidate.type}`} />
-                        <Chip label={`Protocol: ${candidate.protocol}`} />
-                        <Chip label={`Component: ${candidate.component}`} />
-                        <Chip label={`Port: ${candidate.port}`} />
-                      </Box>
-                      <Box sx={{ marginTop: 1 }}>
-                        <Box>Address: {candidate.address}</Box>
+                      <Box sx={{ padding: 2 }}>Peers</Box>
+                      <Box>
+                        {conns.map((conn) => (
+                          <RenderPeerEntry
+                            conn={conn}
+                            key={conn.node_id}
+                            activeNodeId={activeConn}
+                            onSelect={() => switchActiveConn(conn.node_id)}
+                          />
+                        ))}
                       </Box>
                     </Box>
+                  </Box>
+                ) : (
+                  <Box>
                     <Button
+                      loading={connecting}
                       onClick={() => {
-                        navigator?.clipboard?.writeText(
-                          JSON.stringify(candidate.toJSON()),
-                        );
+                        doConnect(wsAddr);
                       }}
                     >
-                      Copy
+                      Connect
                     </Button>
-                  </Card>
-                ))}
-            </Box>
+                  </Box>
+                )}
+              </Box>
+              <ChangeNameDialog
+                name={nameEdited}
+                onNameChange={(name) => {
+                  setNameEdited(name);
+                }}
+                open={showChangeName}
+                onClose={() => {
+                  setShowChangeName(false);
+                }}
+                onConfirm={(newName) => {
+                  return new Promise((resolve) => {
+                    const renamePayload: RenamePayload = {
+                      new_node_name: newName,
+                      origin_node_name: name,
+                    };
+                    const renameMsg: MessagePayload = {
+                      rename: renamePayload,
+                    };
+                    wsRef.current?.send(JSON.stringify(renameMsg));
+
+                    resolve();
+                    setShowChangeName(false);
+                  });
+                }}
+              />
+            </Fragment>
           </Box>
+        </LeftPanel>
+        <Box
+          sx={{
+            padding: 2,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+          }}
+        >
+          {candidates
+            .filter((candidate) => !!candidate.address)
+            .map((candidate) => (
+              <RenderICECandidate
+                candidate={candidate}
+                key={`addr=${candidate.address},type=${candidate.type},protocol=${candidate.protocol}`}
+              />
+            ))}
         </Box>
       </Box>
 
