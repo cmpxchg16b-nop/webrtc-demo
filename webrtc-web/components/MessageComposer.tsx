@@ -11,6 +11,7 @@ import {
   ListItemIcon,
   ListItemText,
   styled,
+  Paper,
 } from "@mui/material";
 import { Fragment, useState } from "react";
 import SendIcon from "@mui/icons-material/Send";
@@ -85,7 +86,7 @@ export function MessageComposer(props: {
     setAnchorEl(null);
   };
   return (
-    <Fragment>
+    <Paper sx={{ borderRadius: 0 }}>
       <Box
         sx={{
           borderTop: "1px solid #999",
@@ -152,6 +153,6 @@ export function MessageComposer(props: {
           <VisuallyHiddenInput type="file" />
         </MenuItem>
       </Menu>
-    </Fragment>
+    </Paper>
   );
 }

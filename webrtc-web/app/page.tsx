@@ -389,11 +389,7 @@ function attachDCEventListeners(
 
   if (dc.label === PredefinedDCLabel.Chat) {
     dc.onmessage = (event) => {
-      console.log(
-        `[dbg]${logSource} data channel chat message`,
-        event.data,
-        dc,
-      );
+      console.log(`[dbg]${logSource} DCID of chat data channel`, dc.id);
       try {
         const msgObject: ChatMessage = JSON.parse(event.data);
         setConnTrackStatus((prev) => {
@@ -423,7 +419,18 @@ function attachDCEventListeners(
       }
     };
   } else if (dc.label === PredefinedDCLabel.File) {
-    // todo: listen events from File DC
+    dc.onmessage = (event) => {
+      console.log(
+        `[dbg]${logSource} data channel file message`,
+        event.data,
+        dc,
+      );
+    };
+    dc.onclose = () => {
+      console.log(`[dbg]${logSource} data channel file closed`, dc);
+      // todo: remove the loading status of the file
+      // how to find the file? find it by the dcId field.
+    };
   } else if (dc.label === PredefinedDCLabel.Ping) {
     dc.onmessage = (event) => {
       try {
@@ -451,38 +458,6 @@ function attachDCEventListeners(
   }
 }
 
-// const testMessages: ChatMessage[] =  [
-//   {
-//     messageId: crypto.randomUUID(),
-//     message: "test message1",
-//     timestamp: 1770937509116,
-//     fromNodeId: nodeIdRef.current,
-//     toNodeId: activeConn,
-//   },
-//   {
-//     messageId: crypto.randomUUID(),
-//     message: "test message2",
-//     timestamp: 1770937509116,
-//     fromNodeId: nodeIdRef.current,
-//     toNodeId: activeConn,
-//   },
-//   {
-//     messageId: crypto.randomUUID(),
-//     message: "test message3\nnewline\nnew line\nnew new    new new new line",
-//     timestamp: 1770937509116,
-//     fromNodeId: nodeIdRef.current,
-//     toNodeId: activeConn,
-//   },
-//   {
-//     messageId: crypto.randomUUID(),
-//     message:
-//       "test message4 long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long line \nnewline\nnew line\nnew new    new new new line",
-//     timestamp: 1770937509116,
-//     fromNodeId: nodeIdRef.current,
-//     toNodeId: activeConn,
-//   },
-// ];
-
 function attachPeerConnectionEventListeners(
   peerConnection: RTCPeerConnection,
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
@@ -493,33 +468,65 @@ function attachPeerConnectionEventListeners(
 ) {
   const logSource = logId ? ` [${logId}]` : "";
   // registering event handlers for peerconnection handle
-  if (
-    peerConnection.oniceconnectionstatechange === null ||
-    peerConnection.oniceconnectionstatechange === undefined
-  ) {
-    peerConnection.oniceconnectionstatechange = (event) => {
-      console.log(`[dbg]${logSource} ice connection state changed`, event);
+  peerConnection.oniceconnectionstatechange = (event) => {
+    console.log(`[dbg]${logSource} ice connection state changed`, event);
+    setConnTrackStatus((prev) => ({
+      ...prev,
+      [remoteNodeId]: {
+        ...prev[remoteNodeId],
+        connecting: false,
+      },
+    }));
+
+    if (
+      peerConnection.iceConnectionState === "connected" ||
+      peerConnection.iceConnectionState === "completed"
+    ) {
       setConnTrackStatus((prev) => ({
         ...prev,
         [remoteNodeId]: {
           ...prev[remoteNodeId],
-          connecting: false,
+          disconnected: false,
         },
       }));
+    }
+    if (peerConnection.iceConnectionState === "checking") {
+      setConnTrackStatus((prev) => ({
+        ...prev,
+        [remoteNodeId]: {
+          ...prev[remoteNodeId],
+          connecting: true,
+        },
+      }));
+    }
+    if (peerConnection.iceConnectionState === "disconnected") {
+      setConnTrackStatus((prev) => ({
+        ...prev,
+        [remoteNodeId]: {
+          ...prev[remoteNodeId],
+          disconnected: true,
+        },
+      }));
+    }
 
-      if (
-        peerConnection.iceConnectionState === "connected" ||
-        peerConnection.iceConnectionState === "completed"
-      ) {
-        setConnTrackStatus((prev) => ({
-          ...prev,
-          [remoteNodeId]: {
-            ...prev[remoteNodeId],
-            disconnected: false,
-          },
-        }));
-      }
-      if (peerConnection.iceConnectionState === "checking") {
+    if (peerConnection.iceConnectionState === "failed") {
+      // see: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Session_lifetime#ice_restart
+      // todo:  pc.setConfiguration(restartConfig);
+      setConnTrackStatus((prev) => ({
+        ...prev,
+        [remoteNodeId]: {
+          ...prev[remoteNodeId],
+          disconnected: true,
+        },
+      }));
+      console.log(
+        `[dbg]${logSource} ice connection to peer`,
+        remoteNodeId,
+        "state changed to failed, doing ICE-restart after 1 second",
+      );
+      setTimeout(() => {
+        console.log(`[dbg]${logSource} restarting ICE for peer`, remoteNodeId);
+        peerConnection.restartIce();
         setConnTrackStatus((prev) => ({
           ...prev,
           [remoteNodeId]: {
@@ -527,107 +534,62 @@ function attachPeerConnectionEventListeners(
             connecting: true,
           },
         }));
-      }
-      if (peerConnection.iceConnectionState === "disconnected") {
-        setConnTrackStatus((prev) => ({
-          ...prev,
-          [remoteNodeId]: {
-            ...prev[remoteNodeId],
-            disconnected: true,
-          },
-        }));
-      }
 
-      if (peerConnection.iceConnectionState === "failed") {
-        // see: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Session_lifetime#ice_restart
-        // todo:  pc.setConfiguration(restartConfig);
-        setConnTrackStatus((prev) => ({
-          ...prev,
-          [remoteNodeId]: {
-            ...prev[remoteNodeId],
-            disconnected: true,
-          },
-        }));
         console.log(
-          `[dbg]${logSource} ice connection to peer`,
+          `[dbg]${logSource} creating iceRestart offer for peer`,
           remoteNodeId,
-          "state changed to failed, doing ICE-restart after 1 second",
         );
-        setTimeout(() => {
-          console.log(
-            `[dbg]${logSource} restarting ICE for peer`,
-            remoteNodeId,
-          );
-          peerConnection.restartIce();
-          setConnTrackStatus((prev) => ({
-            ...prev,
-            [remoteNodeId]: {
-              ...prev[remoteNodeId],
-              connecting: true,
-            },
-          }));
+        peerConnection
+          .createOffer({ iceRestart: true })
+          .then((offer) => {
+            console.log(
+              `[dbg]${logSource} iceRestart offer created for peer`,
+              remoteNodeId,
+              offer,
+            );
+            const offerPayload: SDPOfferPayload = {
+              type: OfferType.Offer,
+              offer_json: JSON.stringify(offer),
+              from_node_id: nodeIdRef.current,
+              to_node_id: remoteNodeId,
+            };
+            const offerMsg: MessagePayload = {
+              sdp_offer: offerPayload,
+            };
+            wsRef.current?.send(JSON.stringify(offerMsg));
+          })
+          .catch((e) => {
+            console.error(
+              `[dbg]${logSource} failed to create iceRestart offer for peer`,
+              remoteNodeId,
+              e,
+            );
+          });
+      }, 1000);
+    }
+  };
 
-          console.log(
-            `[dbg]${logSource} creating iceRestart offer for peer`,
-            remoteNodeId,
-          );
-          peerConnection
-            .createOffer({ iceRestart: true })
-            .then((offer) => {
-              console.log(
-                `[dbg]${logSource} iceRestart offer created for peer`,
-                remoteNodeId,
-                offer,
-              );
-              const offerPayload: SDPOfferPayload = {
-                type: OfferType.Offer,
-                offer_json: JSON.stringify(offer),
-                from_node_id: nodeIdRef.current,
-                to_node_id: remoteNodeId,
-              };
-              const offerMsg: MessagePayload = {
-                sdp_offer: offerPayload,
-              };
-              wsRef.current?.send(JSON.stringify(offerMsg));
-            })
-            .catch((e) => {
-              console.error(
-                `[dbg]${logSource} failed to create iceRestart offer for peer`,
-                remoteNodeId,
-                e,
-              );
-            });
-        }, 1000);
-      }
-    };
-  }
+  peerConnection.onicecandidate = (event) => {
+    const candidate = event.candidate;
+    if (candidate && candidate !== null) {
+      // We found a candidate! Send it to the peer immediately.
+      console.log(`[dbg]${logSource} new local ICE candidate:`, candidate);
 
-  if (
-    peerConnection.onicecandidate === null ||
-    peerConnection.onicecandidate === undefined
-  ) {
-    peerConnection.onicecandidate = (event) => {
-      const candidate = event.candidate;
-      if (candidate && candidate !== null) {
-        // We found a candidate! Send it to the peer immediately.
-        console.log(`[dbg]${logSource} new local ICE candidate:`, candidate);
-
-        const iceOfferPayload: ICEOfferPayload = {
-          offer_json: JSON.stringify(candidate),
-          from_node_id: nodeIdRef.current,
-          to_node_id: remoteNodeId,
-        };
-        const iceOfferMsg: MessagePayload = {
-          ice_offer: iceOfferPayload,
-        };
-        wsRef.current?.send(JSON.stringify(iceOfferMsg));
-      } else {
-        // If event.candidate is null, it means the browser
-        // has finished gathering all possible candidates.
-        console.log(`[dbg]${logSource} End of ICE candidate gathering.`);
-      }
-    };
-  }
+      const iceOfferPayload: ICEOfferPayload = {
+        offer_json: JSON.stringify(candidate),
+        from_node_id: nodeIdRef.current,
+        to_node_id: remoteNodeId,
+      };
+      const iceOfferMsg: MessagePayload = {
+        ice_offer: iceOfferPayload,
+      };
+      wsRef.current?.send(JSON.stringify(iceOfferMsg));
+    } else {
+      // If event.candidate is null, it means the browser
+      // has finished gathering all possible candidates.
+      console.log(`[dbg]${logSource} End of ICE candidate gathering.`);
+    }
+  };
 }
 
 export default function Home() {
@@ -723,11 +685,34 @@ export default function Home() {
         });
     }
 
-    console.log(`[dbg] [${logSource}] ent`, ent);
     if (ent && (ent.pingSeqRef === undefined || ent.pingSeqRef === null)) {
       const pingDC = ent.peerConnection.createDataChannel(
         PredefinedDCLabel.Ping,
       );
+      pingDC.onerror = (ev) => {
+        console.error(`[dbg] [${logSource}] ping data channel error`, ev);
+      };
+      pingDC.onclose = (ev) => {
+        console.log(`[dbg] [${logSource}] ping data channel closed`, ev);
+        if (ent.pingSeqRef) {
+          if (
+            ent.pingSeqRef.timer !== undefined &&
+            ent.pingSeqRef.timer !== null
+          ) {
+            clearInterval(ent.pingSeqRef.timer);
+            ent.pingSeqRef.timer = undefined;
+          }
+          ent.pingSeqRef = undefined;
+          setConnTrackStatus((prev) => ({
+            ...prev,
+            [remoteNodeId]: {
+              ...prev[remoteNodeId],
+              rtt: undefined,
+            },
+          }));
+        }
+      };
+
       pingDC.onmessage = (ev) => {
         console.log(`[dbg] [${logSource}] ping data channel message`, ev);
         try {

@@ -24,6 +24,7 @@ export function LeftPanel(props: {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          borderRadius: 0,
         }}
       >
         <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>{children}</Box>
