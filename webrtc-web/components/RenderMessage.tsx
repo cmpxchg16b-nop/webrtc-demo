@@ -6,6 +6,10 @@ import { Box, Card } from "@mui/material";
 
 export function RenderMessage(props: { message: ChatMessage }) {
   const { message } = props;
+  let loadingProgress = "";
+  if (message.file?.loading) {
+    loadingProgress = `(${Math.round(message.file.loading.progress * 100)}%)`;
+  }
   return (
     <Box>
       <Card
@@ -17,8 +21,19 @@ export function RenderMessage(props: { message: ChatMessage }) {
           maxWidth: "100%",
           width: "max-content",
           flexShrink: 0,
+          position: "relative",
         }}
       >
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: "40%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+          }}
+        ></Box>
         {message.image && (
           <img
             style={{ maxHeight: "240px" }}
@@ -41,6 +56,11 @@ export function RenderMessage(props: { message: ChatMessage }) {
               <Box component="span" sx={{ paddingLeft: 0.5 }}>
                 {message.file.name}
               </Box>
+              {message.file.loading && (
+                <Box component="span" sx={{ paddingLeft: 0.5 }}>
+                  {loadingProgress}
+                </Box>
+              )}
             </a>
           </Box>
         )}

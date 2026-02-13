@@ -151,11 +151,17 @@ export type ChatMessageVideo = {
   type?: string;
 };
 
+export type ChatMessageFileLoading = {
+  // real number in [0, 1]
+  progress: number;
+};
+
 export type ChatMessageFile = {
   url: string;
   name: string;
   size?: number;
   type?: string;
+  loading?: ChatMessageFileLoading;
 };
 
 export type ChatMessage = {

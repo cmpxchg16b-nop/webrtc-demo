@@ -659,6 +659,9 @@ export default function Home() {
         url: "/ping-demo.mp4",
         name: "ping-demo.mp4",
         type: "video/mp4",
+        loading: {
+          progress: 0.4,
+        },
       },
     },
   ];
