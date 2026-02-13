@@ -9,19 +9,16 @@ export function RenderMessage(props: { message: ChatMessage }) {
     <Card
       sx={{
         padding: 2,
-        display: "flex",
-        flexDirection: "row",
         gap: 1,
         flexWrap: "wrap",
         justifyContent: "space-between",
         alignItems: "center",
-
         maxWidth: "100%",
+        width: "max-content",
+        flexShrink: 0,
       }}
     >
-      <Box sx={{ whiteSpace: "pre-wrap", width: "max-content" }}>
-        Message: {message.message}
-      </Box>
+      <Box sx={{ whiteSpace: "pre-wrap" }}>{message.message}</Box>
     </Card>
   );
 }

@@ -384,6 +384,38 @@ function attachDCEventListeners(
   };
 }
 
+// const testMessages: ChatMessage[] =  [
+//   {
+//     messageId: crypto.randomUUID(),
+//     message: "test message1",
+//     timestamp: 1770937509116,
+//     fromNodeId: nodeIdRef.current,
+//     toNodeId: activeConn,
+//   },
+//   {
+//     messageId: crypto.randomUUID(),
+//     message: "test message2",
+//     timestamp: 1770937509116,
+//     fromNodeId: nodeIdRef.current,
+//     toNodeId: activeConn,
+//   },
+//   {
+//     messageId: crypto.randomUUID(),
+//     message: "test message3\nnewline\nnew line\nnew new    new new new line",
+//     timestamp: 1770937509116,
+//     fromNodeId: nodeIdRef.current,
+//     toNodeId: activeConn,
+//   },
+//   {
+//     messageId: crypto.randomUUID(),
+//     message:
+//       "test message4 long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long line \nnewline\nnew line\nnew new    new new new line",
+//     timestamp: 1770937509116,
+//     fromNodeId: nodeIdRef.current,
+//     toNodeId: activeConn,
+//   },
+// ];
+
 function attachPeerConnectionEventListeners(
   peerConnection: RTCPeerConnection,
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
@@ -606,37 +638,7 @@ export default function Home() {
     }
   };
 
-  const messages: ChatMessage[] = connTrackStatus[activeConn]?.messages ?? [
-    {
-      messageId: crypto.randomUUID(),
-      message: "test message1",
-      timestamp: 1770937509116,
-      fromNodeId: nodeIdRef.current,
-      toNodeId: activeConn,
-    },
-    {
-      messageId: crypto.randomUUID(),
-      message: "test message2",
-      timestamp: 1770937509116,
-      fromNodeId: nodeIdRef.current,
-      toNodeId: activeConn,
-    },
-    {
-      messageId: crypto.randomUUID(),
-      message: "test message3\nnewline\nnew line\nnew new    new new new line",
-      timestamp: 1770937509116,
-      fromNodeId: nodeIdRef.current,
-      toNodeId: activeConn,
-    },
-    {
-      messageId: crypto.randomUUID(),
-      message:
-        "test message4 long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long long line \nnewline\nnew line\nnew new    new new new line",
-      timestamp: 1770937509116,
-      fromNodeId: nodeIdRef.current,
-      toNodeId: activeConn,
-    },
-  ];
+  const messages: ChatMessage[] = connTrackStatus[activeConn]?.messages ?? [];
 
   return (
     <Fragment>
@@ -716,15 +718,25 @@ export default function Home() {
           <Box sx={{ flexShrink: 0 }}>
             <MessageComposer
               onMessage={(msgObject) => {
-              msgObject = {
-                ...msgObject,
-                fromNodeId: nodeIdRef.current,
-                toNodeId: activeConn,
-              };
-              connTrackRef.current[activeConn]?.dataChannel?.send(
-                JSON.stringify(msgObject),
-              );
-            }}
+                msgObject = {
+                  ...msgObject,
+                  fromNodeId: nodeIdRef.current,
+                  toNodeId: activeConn,
+                };
+                connTrackRef.current[activeConn]?.dataChannel?.send(
+                  JSON.stringify(msgObject),
+                );
+                setConnTrackStatus((prev) => ({
+                  ...prev,
+                  [activeConn]: {
+                    ...prev[activeConn],
+                    messages: [
+                      ...(prev[activeConn]?.messages ?? []),
+                      msgObject,
+                    ],
+                  },
+                }));
+              }}
             />
           </Box>
         </Box>
