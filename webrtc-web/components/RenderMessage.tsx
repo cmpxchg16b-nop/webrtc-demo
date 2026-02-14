@@ -4,8 +4,13 @@ import { ChatMessage } from "@/apis/types";
 import { InsertDriveFile } from "@mui/icons-material";
 import { Box, Card } from "@mui/material";
 
-export function RenderMessage(props: { message: ChatMessage }) {
-  const { message } = props;
+export function RenderMessage(props: {
+  message: ChatMessage;
+  onAmend?: (amendedMsg: ChatMessage) => void;
+  onDelete?: (deletedMsgId: string) => void;
+}) {
+  // todo: add message edit feature and delete feature in context menu
+  const { message, onAmend, onDelete } = props;
   let loadingProgress = "";
   if (message.file?.loading) {
     loadingProgress = `(${Math.round(message.file.loading.progress * 100)}%)`;
@@ -69,6 +74,11 @@ export function RenderMessage(props: { message: ChatMessage }) {
         {message.message && (
           <Box sx={{ padding: 2, whiteSpace: "pre-wrap" }}>
             {message.message}
+          </Box>
+        )}
+        {message.richText && (
+          <Box sx={{ padding: 2, whiteSpace: "pre-wrap" }}>
+            {message.richText.content}
           </Box>
         )}
       </Card>

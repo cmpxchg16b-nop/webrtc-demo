@@ -185,28 +185,68 @@ export type ChatMessageDelete = {
   messageId: string;
 };
 
+export type ChatMessageText = {
+  content: string;
+
+  // MIME type of the content, mostly 'text/plain'
+  // maybe 'text/html' in the future so that client can render it properly
+  type: string;
+};
+
 export type ChatMessage = {
   // message uuid, globally unique, to prevent a message from being queued multiple times.
   messageId: string;
   fromNodeId: string;
   toNodeId: string;
+  timestamp: number;
+
   image?: ChatMessageFile;
   video?: ChatMessageFile;
   file?: ChatMessageFile;
   ping?: ChatMessagePing;
+
+  // receiver client should delete specified message when received this request
   delete?: ChatMessageDelete;
+
+  // receiver client should amend/modify the specified message when received this request
   amend?: ChatMessageAmend;
-  message: string;
-  messageMIME?: string;
-  timestamp: number;
+
+  // Plain text message, quite similar to a SMS message body
+  message?: string;
+
+  // Rich context text
+  richText?: ChatMessageText;
+};
+
+export type FileTransferStatusEntry = {
+  // one should update this bytesReceived field as well as everytime it updates the chunks array,
+  // so that the consumer doesn't have to re-calculate the bytesReceived field every time.
+  bytesReceived: number;
+
+  chunksReceived?: number;
+  chunksMetadata?: { seq: number; blobType: "blob" | "arraybuffer" }[];
+
+  // depending on the data channel that actually transmit the file data,
+  // if the DC use blob, we use blobChunks here, otherwise we use arrayBufferChunks here
+  blobChunks?: Blob[];
+  arrayBufferChunks?: ArrayBuffer[];
 };
 
 export type ConnTrackStatusEntry = {
-  // todo
+  // indicating lost the connection to the remote peer
   disconnected?: boolean;
+
+  // connecting to the remote peer
   connecting?: boolean;
+
+  // messages we sent to the remote peer and vice versa
   messages?: ChatMessage[];
+
+  // round trip time to the remote peer as measured by the client
   rtt?: number;
+
+  // key is the id of the data channel that actually transmit the file data,
+  fileTransferStatus?: Record<string, FileTransferStatusEntry>;
 };
 
 // key is the node_id of remote peer
@@ -225,6 +265,7 @@ export type PingStateRef = {
   txMap: Record<number, number>;
 };
 
+// these are mutable states that don't have to be rendered to the screen immediately
 export type ConnTrackEntry = {
   peerConnection: RTCPeerConnection;
   remoteOffers: RTCSessionDescriptionInit[];

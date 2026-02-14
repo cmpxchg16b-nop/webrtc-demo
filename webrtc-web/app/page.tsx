@@ -8,8 +8,10 @@ import {
   ConnEntry,
   ConnTrackEntry,
   ConnTrackStatus,
+  ConnTrackStatusEntry,
   EchoDirectionC2S,
   EchoDirectionS2C,
+  FileTransferStatusEntry,
   ICEOfferPayload,
   MessagePayload,
   OfferType,
@@ -411,6 +413,96 @@ function updateConnTrackStatusByMsgObject(
   };
 }
 
+function updateFileTransferStatusEntryByDCData(
+  prev: FileTransferStatusEntry,
+  dc: RTCDataChannel,
+  event: MessageEvent<any>,
+): FileTransferStatusEntry {
+  return {
+    ...prev,
+    bytesReceived: (prev.bytesReceived ?? 0) + event.data.length,
+    chunksReceived: (prev.chunksReceived ?? 0) + 1,
+    chunksMetadata: [
+      ...(prev.chunksMetadata ?? []),
+      { seq: prev.chunksReceived ?? 0, blobType: dc.binaryType },
+    ],
+    blobChunks:
+      dc.binaryType === "blob"
+        ? [...(prev?.blobChunks ?? []), event.data as Blob]
+        : undefined,
+    arrayBufferChunks:
+      dc.binaryType === "arraybuffer"
+        ? [...(prev?.arrayBufferChunks ?? []), event.data as ArrayBuffer]
+        : undefined,
+  };
+}
+
+function updateConnTrackStatusEntryByDCData(
+  prev: ConnTrackStatusEntry,
+  dc: RTCDataChannel,
+  event: MessageEvent<any>,
+) {
+  const dcId = dc.id?.toString()!;
+  if (!dcId) {
+    return prev;
+  }
+  return {
+    ...prev,
+    fileTransferStatus: {
+      ...(prev?.fileTransferStatus ?? {}),
+      [dcId]: updateFileTransferStatusEntryByDCData(
+        prev?.fileTransferStatus?.[dcId] ?? { bytesReceived: 0 },
+        dc,
+        event,
+      ),
+    },
+  };
+}
+
+function updateConnTrackStatusByDCData(
+  prev: ConnTrackStatus,
+  remoteNodeId: string,
+  dc: RTCDataChannel,
+  event: MessageEvent<any>,
+) {
+  const dcId = dc.id?.toString();
+  if (!dcId) {
+    return prev;
+  }
+
+  const connTrackStatus = {
+    ...prev,
+    [remoteNodeId]: updateConnTrackStatusEntryByDCData(
+      prev[remoteNodeId] ?? {},
+      dc,
+      event,
+    ),
+  };
+
+  return connTrackStatus;
+}
+
+function sendFeedBackToDC(
+  dc: RTCDataChannel,
+  chunkSize: number,
+  logSource: string,
+) {
+  if (typeof chunkSize !== "number") {
+    console.error(`[dbg]${logSource} chunk size is not a number`, chunkSize);
+  }
+  const feedBackPayload = new Uint32Array(1);
+  feedBackPayload[0] = chunkSize; // to ack that 0-byte of data has been received
+  // every time we send back the size of the chunk that just received, not the cumulative size of the data that has been received.
+  // so the order doesn't matter: say two ack message arrives like [0, y] or [y, 0], both yields a cumulative size of y = 0 + y in the sender's side.
+  if (dc.binaryType === "blob") {
+    dc.send(new Blob([feedBackPayload.buffer]));
+  } else if (dc.binaryType === "arraybuffer") {
+    dc.send(feedBackPayload.buffer);
+  } else {
+    console.error(`[dbg]${logSource} unknown binary type`, dc.binaryType);
+  }
+}
+
 function attachDCEventListeners(
   dc: RTCDataChannel,
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
@@ -420,6 +512,31 @@ function attachDCEventListeners(
   const logSource = logId ? ` [${logId}]` : "";
   dc.onopen = () => {
     console.log(`[dbg]${logSource} data channel opened`, dc);
+    if (dc.label === PredefinedDCLabel.File) {
+      // for zero-byte file transfer, the onmessage event of the DC might not necessarily fires,
+      // so we need to do this to handle zero-byte file transfer (i.e. to transfer some file that has zero bytes of data)
+      // and this will not overrride the real data, so the order of arrival of onopen event and onmessage event doesn't matter.
+      setConnTrackStatus((prev) => {
+        const dcId = dc.id?.toString();
+        if (!dcId) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [remoteNodeId]: {
+            ...(prev[remoteNodeId] ?? {}),
+            fileTransferStatus: {
+              ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
+              [dcId]: prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
+                bytesReceived: 0,
+              },
+            },
+          },
+        };
+      });
+
+      sendFeedBackToDC(dc, 0, logSource);
+    }
   };
 
   dc.onclose = () => {
@@ -432,7 +549,6 @@ function attachDCEventListeners(
 
   if (dc.label === PredefinedDCLabel.Chat) {
     dc.onmessage = (event) => {
-      console.log(`[dbg]${logSource} DCID of chat data channel`, dc.id);
       try {
         const msgObject: ChatMessage = JSON.parse(event.data);
 
@@ -454,6 +570,10 @@ function attachDCEventListeners(
         event.data,
         dc,
       );
+      setConnTrackStatus((prev) => {
+        return updateConnTrackStatusByDCData(prev, remoteNodeId, dc, event);
+      });
+      sendFeedBackToDC(dc, event.data?.length ?? 0, logSource);
     };
     dc.onclose = () => {
       console.log(`[dbg]${logSource} data channel file closed`, dc);
@@ -471,11 +591,9 @@ function attachDCEventListeners(
           };
           const replyMsg: ChatMessage = {
             messageId: crypto.randomUUID(),
-            message: "",
             timestamp: Date.now(),
             fromNodeId: msgObject.toNodeId ?? "",
             toNodeId: msgObject.fromNodeId ?? "",
-            messageMIME: "text/plain",
             ping: replyPayload,
           };
           dc.send(JSON.stringify(replyMsg));
@@ -621,6 +739,8 @@ function attachPeerConnectionEventListeners(
   };
 }
 
+const pingTimeoutMs = 3000;
+
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
   console.log("[dbg] connTrackStatus", connTrackStatus);
@@ -764,6 +884,9 @@ export default function Home() {
                     rtt: rtt,
                   },
                 }));
+              } else {
+                // timeout, the trace entry has already been deleted
+                // todo: maybe display it properly in the UI ?
               }
             }
           }
@@ -784,19 +907,23 @@ export default function Home() {
           pingSeqRef.seq++;
           const pingMsg: ChatMessage = {
             messageId: crypto.randomUUID(),
-            message: "",
-            messageMIME: "text/plain",
             timestamp: Date.now(),
             fromNodeId: nodeIdRef.current,
             toNodeId: remoteNodeId,
             ping: pingPayload,
           };
-          pingDC.send(JSON.stringify(pingMsg));
           pingSeqRef.txMap[pingPayload.seq] = Date.now();
-          console.log(
-            `[dbg] [${logSource}] sent ping message to remote peer`,
-            pingMsg,
-          );
+          pingDC.send(JSON.stringify(pingMsg));
+          const seq = pingPayload.seq;
+          setTimeout(() => {
+            if (seq in pingSeqRef.txMap) {
+              console.log(
+                `[dbg] [${logSource}] ping message timeout, seq:`,
+                seq,
+              );
+              delete pingSeqRef.txMap[seq];
+            }
+          }, pingTimeoutMs);
         }, 1000);
       };
     }
@@ -819,8 +946,6 @@ export default function Home() {
       fromNodeId: nodeIdRef.current,
       toNodeId: amendMsgObject.toNodeId,
       messageId: crypto.randomUUID(),
-      message: "",
-      messageMIME: "application/json",
       amend: {
         messageId: amendMsgObject.messageId,
         newMessageJSON: JSON.stringify(amendMsgObject),
@@ -845,8 +970,6 @@ export default function Home() {
       fromNodeId: nodeIdRef.current,
       toNodeId: toNodeId,
       messageId: crypto.randomUUID(),
-      message: "",
-      messageMIME: "application/json",
       delete: {
         messageId: deletingMsgId,
       },
@@ -933,7 +1056,16 @@ export default function Home() {
             }}
           >
             {messages.map((message) => (
-              <RenderMessage message={message} key={message.messageId} />
+              <RenderMessage
+                message={message}
+                key={message.messageId}
+                onAmend={(amendedMsg) => {
+                  sendAmendMsg(amendedMsg);
+                }}
+                onDelete={(deletedMsgId) => {
+                  sendMsgDeleteRequest(activeConn, deletedMsgId);
+                }}
+              />
             ))}
           </Box>
           <Box sx={{ flexShrink: 0 }}>
@@ -943,8 +1075,6 @@ export default function Home() {
                   for (const file of filelist) {
                     const msgObject: ChatMessage = {
                       messageId: crypto.randomUUID(),
-                      message: "",
-                      messageMIME: "application/octet-stream",
                       timestamp: Date.now(),
                       fromNodeId: nodeIdRef.current,
                       toNodeId: activeConn,
@@ -959,26 +1089,21 @@ export default function Home() {
                       },
                     };
                     const pc = connTrackRef.current[activeConn]?.peerConnection;
-                    sendMsg(msgObject, activeConn);
-                    const fileDC = pc?.createDataChannel(
-                      PredefinedDCLabel.File,
-                    );
-                    if (fileDC) {
+                    if (pc) {
+                      const fileDC = pc.createDataChannel(
+                        PredefinedDCLabel.File,
+                      );
                       fileDC.onopen = () => {
-                        const amendedMsgObject: ChatMessage = {
-                          ...msgObject,
-                          file: {
-                            ...(msgObject.file ?? {}),
-                            dcId: fileDC.id?.toString() || "",
+                        sendMsg(
+                          {
+                            ...msgObject,
+                            file: {
+                              ...(msgObject.file ?? {}),
+                              dcId: fileDC.id?.toString() || "",
+                            },
                           },
-                        };
-                        sendAmendMsg(amendedMsgObject);
-                        if (!amendedMsgObject.file?.dcId) {
-                          console.error(
-                            "failed to update the dcId field of the ChatMessageFile object",
-                            amendedMsgObject,
-                          );
-                        }
+                          activeConn,
+                        );
                       };
                     }
                   }
@@ -989,8 +1114,6 @@ export default function Home() {
                   for (const file of filelist) {
                     const msgObject: ChatMessage = {
                       messageId: crypto.randomUUID(),
-                      message: "",
-                      messageMIME: "application/octet-stream",
                       timestamp: Date.now(),
                       fromNodeId: nodeIdRef.current,
                       toNodeId: activeConn,
@@ -1019,28 +1142,11 @@ export default function Home() {
                 const msgObject: ChatMessage = {
                   messageId: crypto.randomUUID(),
                   message: text,
-                  messageMIME: "text/plain",
                   timestamp: Date.now(),
                   fromNodeId: nodeIdRef.current,
                   toNodeId: activeConn,
                 };
                 sendMsg(msgObject, activeConn);
-                // if (text.startsWith("test-delete")) {
-                //   const toNodeId = msgObject.toNodeId;
-                //   const deletingMsgId = msgObject.messageId;
-                //   setTimeout(() => {
-                //     sendMsgDeleteRequest(toNodeId, deletingMsgId);
-                //   }, 5000);
-                // }
-                // if (text.startsWith("test-amend")) {
-                //   const amendedMsgObject: ChatMessage = {
-                //     ...msgObject,
-                //     message: text + ":" + "amended message",
-                //   };
-                //   setTimeout(() => {
-                //     sendAmendMsg(amendedMsgObject);
-                //   }, 5000);
-                // }
               }}
             />
           </Box>
