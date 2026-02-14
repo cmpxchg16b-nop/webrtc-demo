@@ -40,9 +40,10 @@ import { RenderMessage } from "@/components/RenderMessage";
 import { MessageComposer } from "@/components/MessageComposer";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
-
+const pingTimeoutMs = 3000;
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
+const defaultFileSegmentSize = 16 * 1024;
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -546,6 +547,25 @@ function sendFeedBackToDC(
   }
 }
 
+function createFileTransferStatusEntry(
+  prev: ConnTrackStatus,
+  remoteNodeId: string,
+  dcId: string,
+): ConnTrackStatus {
+  return {
+    ...prev,
+    [remoteNodeId]: {
+      ...(prev[remoteNodeId] ?? {}),
+      fileTransferStatus: {
+        ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
+        [dcId]: prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
+          bytesReceived: 0,
+        },
+      },
+    },
+  };
+}
+
 function attachDCEventListeners(
   dc: RTCDataChannel,
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
@@ -559,24 +579,12 @@ function attachDCEventListeners(
       // for zero-byte file transfer, the onmessage event of the DC might not necessarily fires,
       // so we need to do this to handle zero-byte file transfer (i.e. to transfer some file that has zero bytes of data)
       // and this will not overrride the real data, so the order of arrival of onopen event and onmessage event doesn't matter.
-      setConnTrackStatus((prev) => {
-        const dcId = dc.id?.toString();
-        if (!dcId) {
-          return prev;
-        }
-        return {
-          ...prev,
-          [remoteNodeId]: {
-            ...(prev[remoteNodeId] ?? {}),
-            fileTransferStatus: {
-              ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
-              [dcId]: prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
-                bytesReceived: 0,
-              },
-            },
-          },
-        };
-      });
+      const dcId = dc.id?.toString();
+      if (dcId) {
+        setConnTrackStatus((prev) => {
+          return createFileTransferStatusEntry(prev, remoteNodeId, dcId);
+        });
+      }
 
       sendFeedBackToDC(dc, 0, logSource);
     }
@@ -649,11 +657,6 @@ function attachDCEventListeners(
     };
   } else if (dc.label === PredefinedDCLabel.File) {
     dc.onmessage = (event) => {
-      console.log(
-        `[dbg]${logSource} data channel file message`,
-        event.data,
-        dc,
-      );
       setConnTrackStatus((prev) => {
         return updateConnTrackStatusByDCData(prev, remoteNodeId, dc, event);
       });
@@ -822,8 +825,6 @@ function attachPeerConnectionEventListeners(
     }
   };
 }
-
-const pingTimeoutMs = 3000;
 
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
@@ -1170,6 +1171,7 @@ export default function Home() {
                         PredefinedDCLabel.File,
                       );
                       fileDC.onopen = () => {
+                        const dcId = fileDC.id?.toString() || "";
                         const msgObject: ChatMessage = {
                           messageId: crypto.randomUUID(),
                           timestamp: Date.now(),
@@ -1180,10 +1182,65 @@ export default function Home() {
                             name: file.name,
                             type: file.type,
                             size: file.size,
-                            dcId: fileDC.id?.toString() || "",
+                            dcId: dcId,
                           },
                         };
-                        sendMsg(msgObject, activeConn);
+                        sendMsg(msgObject, msgObject.toNodeId);
+                        setConnTrackStatus((prev) => {
+                          return createFileTransferStatusEntry(
+                            prev,
+                            msgObject.toNodeId,
+                            dcId,
+                          );
+                        });
+                        fileDC.onmessage = (event) => {
+                          // receiver of file transfer send back the acked chunk size
+                          // todo: update the file transfer status entry
+                        };
+                        let sentSizeRef: { value: number } = { value: 0 };
+                        const doSendChunk = () => {
+                          const offset = sentSizeRef.value;
+                          const endLimit = Math.min(
+                            sentSizeRef.value + defaultFileSegmentSize,
+                            file.size,
+                          );
+                          if (endLimit > offset) {
+                            const chunk = file.slice(offset, endLimit);
+                            if (chunk.size > 0) {
+                              sentSizeRef.value += chunk.size;
+                              fileDC.send(chunk);
+                              console.log(
+                                `[dbg] [initiator] sent chunk`,
+                                chunk,
+                              );
+                            }
+                          }
+                        };
+                        doSendChunk();
+                        fileDC.onbufferedamountlow = (event) => {
+                          doSendChunk();
+                        };
+
+                        fileDC.onclose = () => {
+                          setConnTrackStatus((prev) => {
+                            return closeDCById(
+                              prev,
+                              activeConn,
+                              dcId,
+                              undefined,
+                            );
+                          });
+                        };
+                        fileDC.onerror = (ev) => {
+                          setConnTrackStatus((prev) => {
+                            return closeDCById(
+                              prev,
+                              activeConn,
+                              dcId,
+                              ev.error,
+                            );
+                          });
+                        };
                       };
                     }
                   }
