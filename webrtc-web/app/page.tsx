@@ -44,6 +44,7 @@ const pingTimeoutMs = 3000;
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
 const defaultFileSegmentSize = 16 * 1024;
+const wordSize = 4;
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -1193,9 +1194,64 @@ export default function Home() {
                             dcId,
                           );
                         });
+                        let feedBackParseRef: {
+                          chunks: any[];
+                          totalSize: number;
+                          binaryType: BinaryType;
+                        } = {
+                          chunks: [],
+                          totalSize: 0,
+                          binaryType: fileDC.binaryType,
+                        };
+                        const doConsumeFiletransferFeedbackStream = () => {
+                          if (feedBackParseRef.totalSize >= wordSize) {
+                            const mergedChunk = new Blob(
+                              feedBackParseRef.chunks,
+                            );
+                            const rest = feedBackParseRef.totalSize % wordSize;
+                            if (rest > 0) {
+                              const restChunk = mergedChunk.slice(
+                                mergedChunk.size - rest,
+                              );
+                              feedBackParseRef.chunks.push(restChunk);
+                            }
+                            const wordsChunk = mergedChunk.slice(
+                              0,
+                              mergedChunk.size - rest,
+                            );
+                            wordsChunk.arrayBuffer().then((ab) => {
+                              const wordsArray = new Uint32Array(ab);
+                              for (let i = 0; i < wordsArray.length; i++) {
+                                const word = wordsArray[i];
+                                console.log(
+                                  "[dbg] [initiator] filetransfer feedback word",
+                                  word,
+                                  "file",
+                                  file,
+                                  "dcid",
+                                  dcId,
+                                );
+                              }
+                            });
+                          }
+                        };
                         fileDC.onmessage = (event) => {
                           // receiver of file transfer send back the acked chunk size
-                          // todo: update the file transfer status entry
+                          feedBackParseRef.chunks.push(event.data);
+                          if (feedBackParseRef.binaryType === "arraybuffer") {
+                            const chunkSize = (event.data as ArrayBuffer)
+                              .byteLength;
+                            feedBackParseRef.totalSize += chunkSize;
+                          } else if (feedBackParseRef.binaryType === "blob") {
+                            const chunkSize = (event.data as Blob).size;
+                            feedBackParseRef.totalSize += chunkSize;
+                          } else {
+                            console.error(
+                              "unknown binary type",
+                              feedBackParseRef.binaryType,
+                            );
+                          }
+                          doConsumeFiletransferFeedbackStream();
                         };
                         let sentSizeRef: { value: number } = { value: 0 };
                         const doSendChunk = () => {
@@ -1222,6 +1278,7 @@ export default function Home() {
                         };
 
                         fileDC.onclose = () => {
+                          doConsumeFiletransferFeedbackStream();
                           setConnTrackStatus((prev) => {
                             return closeDCById(
                               prev,
