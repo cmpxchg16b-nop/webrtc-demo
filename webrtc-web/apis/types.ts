@@ -160,7 +160,7 @@ export type ChatMessageFile = {
 
   // the identifier of the DC that actually transmit the file data,
   // file senders sends this to the file receiver in advance before it creates the file transfer DC.
-  dcId?: string;
+  dcId: string;
 };
 
 export enum ChatMessagePingDirection {

@@ -536,7 +536,7 @@ function attachDCEventListeners(
 ) {
   const logSource = logId ? ` [${logId}]` : "";
   dc.onopen = () => {
-    console.log(`[dbg]${logSource} data channel opened`, dc);
+    console.log(`[dbg]${logSource} data channel opened`, dc, "dcId", dc.id);
     if (dc.label === PredefinedDCLabel.File) {
       // for zero-byte file transfer, the onmessage event of the DC might not necessarily fires,
       // so we need to do this to handle zero-byte file transfer (i.e. to transfer some file that has zero bytes of data)
@@ -1117,64 +1117,57 @@ export default function Home() {
               onFile={(filelist) => {
                 if (filelist && filelist.length > 0) {
                   for (const file of filelist) {
-                    const msgObject: ChatMessage = {
-                      messageId: crypto.randomUUID(),
-                      timestamp: Date.now(),
-                      fromNodeId: nodeIdRef.current,
-                      toNodeId: activeConn,
-                      file: {
-                        url: "",
-                        name: file.name,
-                        type: file.type,
-                        size: file.size,
-                      },
-                    };
                     const pc = connTrackRef.current[activeConn]?.peerConnection;
                     if (pc) {
                       const fileDC = pc.createDataChannel(
                         PredefinedDCLabel.File,
                       );
                       fileDC.onopen = () => {
-                        sendMsg(
-                          {
-                            ...msgObject,
-                            file: {
-                              ...(msgObject.file ?? {}),
-                              dcId: fileDC.id?.toString() || "",
-                            },
+                        const msgObject: ChatMessage = {
+                          messageId: crypto.randomUUID(),
+                          timestamp: Date.now(),
+                          fromNodeId: nodeIdRef.current,
+                          toNodeId: activeConn,
+                          file: {
+                            url: "",
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            dcId: fileDC.id?.toString() || "",
                           },
-                          activeConn,
-                        );
+                        };
+                        sendMsg(msgObject, activeConn);
                       };
                     }
                   }
                 }
               }}
               onPhoto={(filelist) => {
-                if (filelist && filelist.length > 0) {
-                  for (const file of filelist) {
-                    const msgObject: ChatMessage = {
-                      messageId: crypto.randomUUID(),
-                      timestamp: Date.now(),
-                      fromNodeId: nodeIdRef.current,
-                      toNodeId: activeConn,
-                    };
-                    const filePayload: ChatMessageFile = {
-                      url: "",
-                      name: file.name,
-                      type: file.type,
-                      size: file.size,
-                    };
-                    if (file.type.startsWith("image/")) {
-                      msgObject.image = filePayload;
-                    } else if (file.type.startsWith("video/")) {
-                      msgObject.video = filePayload;
-                    } else {
-                      msgObject.file = filePayload;
-                    }
-                    sendMsg(msgObject, activeConn);
-                  }
-                }
+                // todo
+                // if (filelist && filelist.length > 0) {
+                //   for (const file of filelist) {
+                //     const msgObject: ChatMessage = {
+                //       messageId: crypto.randomUUID(),
+                //       timestamp: Date.now(),
+                //       fromNodeId: nodeIdRef.current,
+                //       toNodeId: activeConn,
+                //     };
+                //     const filePayload: ChatMessageFile = {
+                //       url: "",
+                //       name: file.name,
+                //       type: file.type,
+                //       size: file.size,
+                //     };
+                //     if (file.type.startsWith("image/")) {
+                //       msgObject.image = filePayload;
+                //     } else if (file.type.startsWith("video/")) {
+                //       msgObject.video = filePayload;
+                //     } else {
+                //       msgObject.file = filePayload;
+                //     }
+                //     sendMsg(msgObject, activeConn);
+                //   }
+                // }
               }}
               onText={(text) => {
                 const msgObject: ChatMessage = {
