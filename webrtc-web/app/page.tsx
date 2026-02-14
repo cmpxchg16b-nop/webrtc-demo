@@ -483,6 +483,24 @@ function updateConnTrackStatusByDCData(
   return connTrackStatus;
 }
 
+function sendAckToDC(
+  dc: RTCDataChannel,
+  fromNodeId: string,
+  toNodeId: string,
+  messageId: string,
+) {
+  const msgObject: ChatMessage = {
+    fromNodeId,
+    toNodeId,
+    timestamp: Date.now(),
+    messageId: crypto.randomUUID(),
+    ack: {
+      messageId,
+    },
+  };
+  dc.send(JSON.stringify(msgObject));
+}
+
 function closeDCById(
   prev: ConnTrackStatus,
   remoteNodeId: string,
@@ -593,13 +611,38 @@ function attachDCEventListeners(
       try {
         const msgObject: ChatMessage = JSON.parse(event.data);
 
-        setConnTrackStatus((prev) => {
-          return updateConnTrackStatusByMsgObject(
-            prev,
-            remoteNodeId,
-            msgObject,
+        if (msgObject.ack) {
+          // the receiver just sent us an ack, so we update the list of messages
+          // and we SHOULD NOT send back an ack (this would cause a loop)
+          const msgId = msgObject.ack.messageId;
+          setConnTrackStatus((prev) => {
+            return {
+              ...prev,
+              [remoteNodeId]: {
+                ...(prev[remoteNodeId] ?? {}),
+                messages:
+                  prev[remoteNodeId]?.messages?.map((msg) =>
+                    msg.messageId === msgId ? { ...msg, acked: true } : msg,
+                  ) ?? [],
+              },
+            };
+          });
+        } else {
+          setConnTrackStatus((prev) => {
+            return updateConnTrackStatusByMsgObject(
+              prev,
+              remoteNodeId,
+              msgObject,
+            );
+          });
+          // send back the ack to the sender
+          sendAckToDC(
+            dc,
+            msgObject.toNodeId,
+            msgObject.fromNodeId,
+            msgObject.messageId,
           );
-        });
+        }
       } catch (e) {
         console.error("failed to parse data channel chat message", e);
       }
@@ -970,7 +1013,11 @@ export default function Home() {
     }
   };
 
-  const messages: ChatMessage[] = connTrackStatus[activeConn]?.messages ?? [];
+  // for messages sent by ourselves, it has to be acked before it can appear on the screen.
+  const messages: ChatMessage[] =
+    connTrackStatus[activeConn]?.messages?.filter(
+      (msg) => msg.acked || msg.fromNodeId !== nodeId,
+    ) ?? [];
 
   const sendMsg = (msgObject: ChatMessage, toNodeId: string) => {
     connTrackRef.current[toNodeId]?.dataChannel?.send(

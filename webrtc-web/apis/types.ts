@@ -193,6 +193,11 @@ export type ChatMessageText = {
   type: string;
 };
 
+export type ChatMessageACK = {
+  // the messageId of the message to be acknowledged
+  messageId: string;
+};
+
 export type ChatMessage = {
   // message uuid, globally unique, to prevent a message from being queued multiple times.
   messageId: string;
@@ -210,6 +215,12 @@ export type ChatMessage = {
 
   // receiver client should amend/modify the specified message when received this request
   amend?: ChatMessageAmend;
+
+  // messages in sender side has to be acked before it can appear on the screen.
+  // also, acked doesn't necessarily means that the receiver has read the message, it's all about the transport layer,
+  // it means that the data of the message has been successfully delivered to the receiver.
+  ack?: ChatMessageACK;
+  acked?: boolean;
 
   // Plain text message, quite similar to a SMS message body
   message?: string;
