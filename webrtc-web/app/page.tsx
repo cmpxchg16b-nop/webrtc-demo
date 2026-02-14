@@ -416,11 +416,11 @@ function updateConnTrackStatusByMsgObject(
 function updateFileTransferStatusEntryByDCData(
   prev: FileTransferStatusEntry,
   dc: RTCDataChannel,
-  event: MessageEvent<any>,
+  data: any,
 ): FileTransferStatusEntry {
   return {
     ...prev,
-    bytesReceived: (prev.bytesReceived ?? 0) + event.data.length,
+    bytesReceived: (prev.bytesReceived ?? 0) + data.length,
     chunksReceived: (prev.chunksReceived ?? 0) + 1,
     chunksMetadata: [
       ...(prev.chunksMetadata ?? []),
@@ -428,11 +428,11 @@ function updateFileTransferStatusEntryByDCData(
     ],
     blobChunks:
       dc.binaryType === "blob"
-        ? [...(prev?.blobChunks ?? []), event.data as Blob]
+        ? [...(prev?.blobChunks ?? []), data as Blob]
         : undefined,
     arrayBufferChunks:
       dc.binaryType === "arraybuffer"
-        ? [...(prev?.arrayBufferChunks ?? []), event.data as ArrayBuffer]
+        ? [...(prev?.arrayBufferChunks ?? []), data as ArrayBuffer]
         : undefined,
   };
 }
@@ -440,7 +440,7 @@ function updateFileTransferStatusEntryByDCData(
 function updateConnTrackStatusEntryByDCData(
   prev: ConnTrackStatusEntry,
   dc: RTCDataChannel,
-  event: MessageEvent<any>,
+  data: any,
 ) {
   const dcId = dc.id?.toString()!;
   if (!dcId) {
@@ -453,17 +453,18 @@ function updateConnTrackStatusEntryByDCData(
       [dcId]: updateFileTransferStatusEntryByDCData(
         prev?.fileTransferStatus?.[dcId] ?? { bytesReceived: 0 },
         dc,
-        event,
+        data,
       ),
     },
   };
 }
 
+// both the sender and the receiver can call this function to update the status of file transfer
 function updateConnTrackStatusByDCData(
   prev: ConnTrackStatus,
   remoteNodeId: string,
   dc: RTCDataChannel,
-  event: MessageEvent<any>,
+  data: any, // could be a Blob or ArrayBuffer depending on the DC's binaryType
 ) {
   const dcId = dc.id?.toString();
   if (!dcId) {
@@ -475,7 +476,7 @@ function updateConnTrackStatusByDCData(
     [remoteNodeId]: updateConnTrackStatusEntryByDCData(
       prev[remoteNodeId] ?? {},
       dc,
-      event,
+      data,
     ),
   };
 
