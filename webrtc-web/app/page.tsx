@@ -483,6 +483,30 @@ function updateConnTrackStatusByDCData(
   return connTrackStatus;
 }
 
+function closeDCById(
+  prev: ConnTrackStatus,
+  remoteNodeId: string,
+  dcId: string,
+  error?: Error,
+) {
+  return {
+    ...prev,
+    [remoteNodeId]: {
+      ...(prev[remoteNodeId] ?? {}),
+      fileTransferStatus: {
+        ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
+        [dcId]: {
+          ...(prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
+            bytesReceived: 0,
+          }),
+          closed: true,
+          error: error,
+        },
+      },
+    },
+  };
+}
+
 function sendFeedBackToDC(
   dc: RTCDataChannel,
   chunkSize: number,
@@ -542,10 +566,26 @@ function attachDCEventListeners(
 
   dc.onclose = () => {
     console.log(`[dbg]${logSource} data channel closed`, dc);
+    if (dc.label === PredefinedDCLabel.File) {
+      const dcId = dc.id?.toString();
+      if (dcId) {
+        setConnTrackStatus((prev) => {
+          return closeDCById(prev, remoteNodeId, dcId, undefined);
+        });
+      }
+    }
   };
 
   dc.onerror = (error) => {
     console.error(`[dbg]${logSource} data channel error`, error);
+    if (dc.label === PredefinedDCLabel.File) {
+      const dcId = dc.id?.toString();
+      if (dcId) {
+        setConnTrackStatus((prev) => {
+          return closeDCById(prev, remoteNodeId, dcId, error.error);
+        });
+      }
+    }
   };
 
   if (dc.label === PredefinedDCLabel.Chat) {
@@ -1066,6 +1106,9 @@ export default function Home() {
                 onDelete={(deletedMsgId) => {
                   sendMsgDeleteRequest(activeConn, deletedMsgId);
                 }}
+                fileTransferStatus={
+                  connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                }
               />
             ))}
           </Box>
@@ -1084,9 +1127,6 @@ export default function Home() {
                         name: file.name,
                         type: file.type,
                         size: file.size,
-                        loading: {
-                          progress: 0,
-                        },
                       },
                     };
                     const pc = connTrackRef.current[activeConn]?.peerConnection;
@@ -1124,9 +1164,6 @@ export default function Home() {
                       name: file.name,
                       type: file.type,
                       size: file.size,
-                      loading: {
-                        progress: 0,
-                      },
                     };
                     if (file.type.startsWith("image/")) {
                       msgObject.image = filePayload;

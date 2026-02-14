@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatMessage } from "@/apis/types";
+import { ChatMessage, FileTransferStatusEntry } from "@/apis/types";
 import { InsertDriveFile } from "@mui/icons-material";
 import { Box, Card } from "@mui/material";
 
@@ -8,13 +8,22 @@ export function RenderMessage(props: {
   message: ChatMessage;
   onAmend?: (amendedMsg: ChatMessage) => void;
   onDelete?: (deletedMsgId: string) => void;
+  fileTransferStatus: Record<string, FileTransferStatusEntry>;
 }) {
   // todo: add message edit feature and delete feature in context menu
-  const { message, onAmend, onDelete } = props;
+  const { message, onAmend, onDelete, fileTransferStatus } = props;
   let loadingProgress = "";
-  if (message.file?.loading) {
-    loadingProgress = `(${Math.round(message.file.loading.progress * 100)}%)`;
+  const dcId = message.file?.dcId;
+  const fileLoadingStatus = dcId ? fileTransferStatus[dcId] : undefined;
+
+  let fileLoadedRatio: number | undefined;
+  if (fileLoadingStatus) {
+    const fileTotalSize = message.file?.size ?? 0;
+    fileLoadedRatio = fileLoadingStatus.bytesReceived / fileTotalSize;
+    const percentage = Math.round(fileLoadedRatio * 100);
+    loadingProgress = `(${percentage}%)`;
   }
+
   return (
     <Box>
       <Card
@@ -29,13 +38,13 @@ export function RenderMessage(props: {
           position: "relative",
         }}
       >
-        {message.file?.loading && (
+        {fileLoadedRatio && fileLoadingStatus && !fileLoadingStatus?.closed && (
           <Box
             sx={{
               position: "absolute",
               top: 0,
               right: 0,
-              width: `${(1 - message.file.loading.progress) * 100}%`,
+              width: `${(1 - fileLoadedRatio) * 100}%`,
               height: "100%",
               backgroundColor: "rgba(0, 0, 0, 0.5)",
             }}
@@ -63,11 +72,13 @@ export function RenderMessage(props: {
               <Box component="span" sx={{ paddingLeft: 0.5 }}>
                 {message.file.name}
               </Box>
-              {message.file.loading && (
-                <Box component="span" sx={{ paddingLeft: 0.5 }}>
-                  {loadingProgress}
-                </Box>
-              )}
+              {loadingProgress &&
+                fileLoadingStatus &&
+                !fileLoadingStatus?.closed && (
+                  <Box component="span" sx={{ paddingLeft: 0.5 }}>
+                    {loadingProgress}
+                  </Box>
+                )}
             </a>
           </Box>
         )}

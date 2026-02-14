@@ -154,9 +154,9 @@ export type ChatMessageFileLoading = {
 export type ChatMessageFile = {
   url?: string;
   name?: string;
+  // size is the total size of the file content, not the transferred(or received) size
   size?: number;
   type?: string;
-  loading?: ChatMessageFileLoading;
 
   // the identifier of the DC that actually transmit the file data,
   // file senders sends this to the file receiver in advance before it creates the file transfer DC.
@@ -230,6 +230,9 @@ export type FileTransferStatusEntry = {
   // if the DC use blob, we use blobChunks here, otherwise we use arrayBufferChunks here
   blobChunks?: Blob[];
   arrayBufferChunks?: ArrayBuffer[];
+
+  closed?: boolean;
+  error?: Error;
 };
 
 export type ConnTrackStatusEntry = {
