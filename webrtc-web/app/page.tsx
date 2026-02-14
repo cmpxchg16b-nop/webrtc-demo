@@ -527,6 +527,13 @@ function closeDCById(
   };
 }
 
+function isLittleEndian() {
+  const test = new Uint32Array(1);
+  test[0] = 1;
+  const bytesArray = new Uint8Array(test.buffer);
+  return bytesArray[0] === 1;
+}
+
 function sendFeedBackToDC(
   dc: RTCDataChannel,
   chunkSize: number,
@@ -537,12 +544,18 @@ function sendFeedBackToDC(
   }
   const feedBackPayload = new Uint32Array(1);
   feedBackPayload[0] = chunkSize; // to ack that 0-byte of data has been received
+  let ab = feedBackPayload.buffer;
+  let u8s = new Uint8Array(ab);
+  if (isLittleEndian()) {
+    u8s.reverse();
+  }
+
   // every time we send back the size of the chunk that just received, not the cumulative size of the data that has been received.
   // so the order doesn't matter: say two ack message arrives like [0, y] or [y, 0], both yields a cumulative size of y = 0 + y in the sender's side.
   if (dc.binaryType === "blob") {
-    dc.send(new Blob([feedBackPayload.buffer]));
+    dc.send(new Blob([u8s.buffer]));
   } else if (dc.binaryType === "arraybuffer") {
-    dc.send(feedBackPayload.buffer);
+    dc.send(u8s.buffer);
   } else {
     console.error(`[dbg]${logSource} unknown binary type`, dc.binaryType);
   }
@@ -825,6 +838,62 @@ function attachPeerConnectionEventListeners(
       console.log(`[dbg]${logSource} End of ICE candidate gathering.`);
     }
   };
+}
+
+function newUint32StreamParser(binaryType: BinaryType) {
+  let feedBackParseRef: {
+    chunks: any[];
+    totalSize: number;
+    binaryType: BinaryType;
+  } = {
+    chunks: [],
+    totalSize: 0,
+    binaryType: binaryType,
+  };
+
+  const doConsume = (dataCb: (word: number) => void) => {
+    if (feedBackParseRef.totalSize >= wordSize) {
+      const mergedChunk = new Blob(feedBackParseRef.chunks);
+      const rest = feedBackParseRef.totalSize % wordSize;
+      if (rest > 0) {
+        const restChunk = mergedChunk.slice(mergedChunk.size - rest);
+        feedBackParseRef.chunks.push(restChunk);
+      }
+      const wordsChunk = mergedChunk.slice(0, mergedChunk.size - rest);
+      wordsChunk.arrayBuffer().then((ab) => {
+        const wordsArray = new Uint32Array(ab);
+        for (let i = 0; i < wordsArray.length; i++) {
+          const word = wordsArray[i];
+          dataCb(word);
+        }
+      });
+    }
+  };
+  return new TransformStream({
+    transform(chunk, controller) {
+      feedBackParseRef.chunks.push(chunk);
+      if (chunk instanceof ArrayBuffer) {
+        const chunkSize = (chunk as ArrayBuffer).byteLength;
+        feedBackParseRef.totalSize += chunkSize;
+      } else if (chunk instanceof Blob) {
+        const chunkSize = (chunk as Blob).size;
+        feedBackParseRef.totalSize += chunkSize;
+      } else {
+        console.error(
+          "[dbg] [uint32streamparser] unknown binary type",
+          feedBackParseRef.binaryType,
+        );
+      }
+      doConsume((word) => {
+        controller.enqueue(word);
+      });
+    },
+    flush(controller) {
+      doConsume((word) => {
+        controller.enqueue(word);
+      });
+    },
+  });
 }
 
 export default function Home() {
@@ -1194,64 +1263,30 @@ export default function Home() {
                             dcId,
                           );
                         });
-                        let feedBackParseRef: {
-                          chunks: any[];
-                          totalSize: number;
-                          binaryType: BinaryType;
-                        } = {
-                          chunks: [],
-                          totalSize: 0,
-                          binaryType: fileDC.binaryType,
-                        };
-                        const doConsumeFiletransferFeedbackStream = () => {
-                          if (feedBackParseRef.totalSize >= wordSize) {
-                            const mergedChunk = new Blob(
-                              feedBackParseRef.chunks,
-                            );
-                            const rest = feedBackParseRef.totalSize % wordSize;
-                            if (rest > 0) {
-                              const restChunk = mergedChunk.slice(
-                                mergedChunk.size - rest,
-                              );
-                              feedBackParseRef.chunks.push(restChunk);
-                            }
-                            const wordsChunk = mergedChunk.slice(
-                              0,
-                              mergedChunk.size - rest,
-                            );
-                            wordsChunk.arrayBuffer().then((ab) => {
-                              const wordsArray = new Uint32Array(ab);
-                              for (let i = 0; i < wordsArray.length; i++) {
-                                const word = wordsArray[i];
-                                console.log(
-                                  "[dbg] [initiator] filetransfer feedback word",
-                                  word,
-                                  "file",
-                                  file,
-                                  "dcid",
-                                  dcId,
-                                );
-                              }
-                            });
+
+                        const feedbackWordStream = newUint32StreamParser(
+                          fileDC.binaryType,
+                        );
+                        const fbWriter =
+                          feedbackWordStream.writable.getWriter();
+                        const fbReader =
+                          feedbackWordStream.readable.getReader();
+                        fbReader.read().then(({ value, done }) => {
+                          if (done) {
+                            return;
                           }
-                        };
+                          const word = value as number;
+                          console.log(
+                            `[dbg] [initiator] filetransfer feedback word`,
+                            word,
+                            "file",
+                            file,
+                            "dcid",
+                            dcId,
+                          );
+                        });
                         fileDC.onmessage = (event) => {
-                          // receiver of file transfer send back the acked chunk size
-                          feedBackParseRef.chunks.push(event.data);
-                          if (feedBackParseRef.binaryType === "arraybuffer") {
-                            const chunkSize = (event.data as ArrayBuffer)
-                              .byteLength;
-                            feedBackParseRef.totalSize += chunkSize;
-                          } else if (feedBackParseRef.binaryType === "blob") {
-                            const chunkSize = (event.data as Blob).size;
-                            feedBackParseRef.totalSize += chunkSize;
-                          } else {
-                            console.error(
-                              "unknown binary type",
-                              feedBackParseRef.binaryType,
-                            );
-                          }
-                          doConsumeFiletransferFeedbackStream();
+                          fbWriter.write(event.data);
                         };
                         let sentSizeRef: { value: number } = { value: 0 };
                         const doSendChunk = () => {
@@ -1278,7 +1313,7 @@ export default function Home() {
                         };
 
                         fileDC.onclose = () => {
-                          doConsumeFiletransferFeedbackStream();
+                          fbWriter.close();
                           setConnTrackStatus((prev) => {
                             return closeDCById(
                               prev,
