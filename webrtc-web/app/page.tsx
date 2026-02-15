@@ -48,7 +48,7 @@ const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
-const defaultFileSegmentSize = 64 * 1024;
+const defaultFileSegmentSize = 128 * 1024;
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -1283,33 +1283,61 @@ export default function Home() {
 
                         let sentSizeRef: { value: number } = { value: 0 };
 
-                        const doSendChunk = () => {
+                        const doSendChunk = (maxSize: number) => {
                           const offset = sentSizeRef.value;
                           const endLimit = Math.min(
                             sentSizeRef.value + defaultFileSegmentSize,
                             file.size,
+                            offset + maxSize + 1,
                           );
                           if (endLimit > offset) {
                             const chunk = file.slice(offset, endLimit);
                             if (chunk.size > 0) {
                               sentSizeRef.value += chunk.size;
                               const s = chunk.size;
-                              fileDC.send(chunk);
-                              console.log(
-                                `[dbg] [initiator] file transfer DC sent chunk`,
-                                chunk,
-                                "sent",
-                                sentSizeRef,
-                              );
-                              return s;
+                              try {
+                                fileDC.send(chunk);
+                                console.log(
+                                  `[dbg] [initiator] file transfer DC sent chunk`,
+                                  chunk,
+                                  "sent",
+                                  sentSizeRef,
+                                );
+                                return s;
+                              } catch (e) {
+                                console.error("failed to send chunk", e);
+                              }
                             }
                           }
                           return 0;
                         };
 
-                        doSendChunk();
+                        fileDC.bufferedAmountLowThreshold = 4 * 1024 * 1024;
+                        const doSendChunks = () => {
+                          let freeSpace =
+                            fileDC.bufferedAmountLowThreshold -
+                            fileDC.bufferedAmount;
+                          console.log(
+                            `[dbg] [initiator] file transfer DC free space`,
+                            freeSpace,
+                          );
+                          while (freeSpace >= 0) {
+                            const s = doSendChunk(freeSpace);
+                            if (s === 0) {
+                              break;
+                            }
+                            freeSpace -= s;
+                          }
+                        };
+                        doSendChunks();
                         fileDC.onbufferedamountlow = (event) => {
-                          doSendChunk();
+                          console.log(
+                            `[dbg] [initiator] file transfer DC buffered amount low`,
+                            event,
+                            fileDC.bufferedAmount,
+                            fileDC.bufferedAmountLowThreshold,
+                          );
+                          doSendChunks();
                         };
 
                         fileDC.onclose = () => {
