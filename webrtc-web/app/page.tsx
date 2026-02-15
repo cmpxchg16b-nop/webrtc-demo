@@ -49,6 +49,8 @@ const pingTimeoutMs = 3000;
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
 const defaultFileSegmentSize = 16 * 1024;
+// const defaultDCLowBufThreshold = 16 * 1024 * 1024;
+const defaultDCLowBufThreshold = 16 * 1024 * 1024;
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -536,6 +538,14 @@ function closeDCById(
           closed: true,
           error: error,
           originFile: originFile,
+          url: originFile
+            ? URL.createObjectURL(originFile)
+            : URL.createObjectURL(
+                new Blob(
+                  prev[remoteNodeId]?.fileTransferStatus?.[dcId]
+                    ?.arrayBufferChunks ?? [],
+                ),
+              ),
         },
       },
     },
@@ -544,12 +554,17 @@ function closeDCById(
 
 function sendFeedBackToDC(
   dc: RTCDataChannel,
-  chunkSize: number,
-  logSource: string,
+  chunkSizeAny: number | ArrayBuffer | Blob,
 ) {
-  if (typeof chunkSize !== "number") {
-    console.error(`[dbg]${logSource} chunk size is not a number`, chunkSize);
-  }
+  const chunkSize =
+    typeof chunkSizeAny === "number"
+      ? chunkSizeAny
+      : chunkSizeAny instanceof Blob
+        ? chunkSizeAny.size
+        : chunkSizeAny instanceof ArrayBuffer
+          ? chunkSizeAny.byteLength
+          : 0;
+
   const ab = new ArrayBuffer(wordSize);
   new DataView(ab).setUint32(0, chunkSize, false);
   dc.send(ab);
@@ -595,7 +610,7 @@ function attachDCEventListeners(
         });
       }
 
-      sendFeedBackToDC(dc, 0, logSource);
+      sendFeedBackToDC(dc, 0);
     }
   };
 
@@ -674,12 +689,7 @@ function attachDCEventListeners(
           event.data,
         );
       });
-      sendFeedBackToDC(dc, event.data?.length ?? 0, logSource);
-    };
-    dc.onclose = () => {
-      console.log(`[dbg]${logSource} data channel file closed`, dc);
-      // todo: remove the loading status of the file
-      // how to find the file? find it by the dcId field.
+      sendFeedBackToDC(dc, event.data);
     };
   } else if (dc.label === PredefinedDCLabel.Ping) {
     dc.onmessage = (event) => {
@@ -1193,7 +1203,6 @@ export default function Home() {
                           fromNodeId: nodeIdRef.current,
                           toNodeId: activeConn,
                           file: {
-                            url: "",
                             name: file.name,
                             type: file.type,
                             size: file.size,
@@ -1216,7 +1225,13 @@ export default function Home() {
                         let fbRef: { receivedTotalBytes: number } = {
                           receivedTotalBytes: 0,
                         };
-                        fbReader.read().then(({ value, done }) => {
+                        const doReadFeedBackStream = ({
+                          value,
+                          done,
+                        }: {
+                          value: any;
+                          done: boolean;
+                        }) => {
                           if (done) {
                             return;
                           }
@@ -1252,9 +1267,17 @@ export default function Home() {
                             );
                             fileDC.close();
                           }
-                        });
+                          fbReader.read().then(doReadFeedBackStream);
+                        };
+                        fbReader
+                          .read()
+                          .then(doReadFeedBackStream)
+                          .catch((e) =>
+                            console.error("failed to read feed back stream", e),
+                          );
 
                         let sentSizeRef: { value: number } = { value: 0 };
+
                         const doSendChunk = () => {
                           const offset = sentSizeRef.value;
                           const endLimit = Math.min(
@@ -1265,17 +1288,39 @@ export default function Home() {
                             const chunk = file.slice(offset, endLimit);
                             if (chunk.size > 0) {
                               sentSizeRef.value += chunk.size;
+                              const s = chunk.size;
                               fileDC.send(chunk);
                               console.log(
                                 `[dbg] [initiator] file transfer DC sent chunk`,
                                 chunk,
+                                "sent",
+                                sentSizeRef,
                               );
+                              return s;
+                            }
+                          }
+                          return 0;
+                        };
+                        const doSendChunks = () => {
+                          while (
+                            fileDC.bufferedAmount <
+                            fileDC.bufferedAmountLowThreshold
+                          ) {
+                            const s = doSendChunk();
+                            if (
+                              s === 0 ||
+                              fileDC.bufferedAmountLowThreshold == 0
+                            ) {
+                              // to prevent infinite loop
+                              break;
                             }
                           }
                         };
-                        doSendChunk();
+                        fileDC.bufferedAmountLowThreshold =
+                          defaultDCLowBufThreshold;
+                        doSendChunks();
                         fileDC.onbufferedamountlow = (event) => {
-                          doSendChunk();
+                          doSendChunks();
                         };
 
                         fileDC.onclose = () => {

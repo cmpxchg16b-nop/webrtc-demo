@@ -152,7 +152,6 @@ export type ChatMessageFileLoading = {
 };
 
 export type ChatMessageFile = {
-  url?: string;
   name?: string;
   // size is the total size of the file content, not the transferred(or received) size
   size?: number;
@@ -161,6 +160,8 @@ export type ChatMessageFile = {
   // the identifier of the DC that actually transmit the file data,
   // file senders sends this to the file receiver in advance before it creates the file transfer DC.
   dcId: string;
+
+  url?: string;
 };
 
 export enum ChatMessagePingDirection {
@@ -247,6 +248,7 @@ export type FileTransferStatusEntry = {
 
   closed?: boolean;
   error?: Error;
+  url?: string;
 };
 
 export type ConnTrackStatusEntry = {

@@ -1,88 +1,75 @@
 export const wordSize = 4;
 
 export function createStreamFromDataChannel(channel: RTCDataChannel) {
-  if (channel.binaryType !== "arraybuffer") {
-    console.log("setting binary type to arraybuffer for consistency", channel);
-    channel.binaryType = "arraybuffer";
-  }
-
   return new ReadableStream({
     start(controller) {
       channel.onmessage = (event) => {
         controller.enqueue(event.data);
       };
     },
-
-    cancel() {
-      // we don't close the underlying data channel here,
-      // it will be closed at somewhere else.
-    },
   });
+}
+
+function mergeArrayBuffers(chunks: ArrayBuffer[], totalSize: number) {
+  const mergedBuffer = new ArrayBuffer(totalSize);
+  const dv = new DataView(mergedBuffer);
+  let offset = 0;
+  for (const chunk of chunks) {
+    const u8s = new Uint8Array(chunk);
+    u8s.forEach((octet, i) => dv.setUint8(offset + i, octet));
+    offset += chunk.byteLength;
+  }
+  return mergedBuffer;
 }
 
 // parse a network stream in network byte order (big endian) into a stream of 32-bit words
 export function newUint32StreamParser() {
   let feedBackParseRef: {
-    chunks: any[];
+    chunks: ArrayBuffer[];
     totalSize: number;
   } = {
     chunks: [],
     totalSize: 0,
   };
 
-  const doConsume = async () => {
+  const doConsume = (controller: TransformStreamDefaultController<number>) => {
     if (feedBackParseRef.totalSize >= wordSize) {
-      const mergedChunk = new Blob(feedBackParseRef.chunks);
-      const rest = feedBackParseRef.totalSize % wordSize;
-      feedBackParseRef.totalSize = 0;
-      feedBackParseRef.chunks = [];
-      if (rest > 0) {
-        const restChunk = mergedChunk.slice(mergedChunk.size - rest);
-        feedBackParseRef.chunks.push(restChunk);
-        feedBackParseRef.totalSize += restChunk.size;
+      const nWords = Math.floor(feedBackParseRef.totalSize / wordSize);
+      const restSize = feedBackParseRef.totalSize % wordSize;
+      const mergedBuffer = mergeArrayBuffers(
+        feedBackParseRef.chunks,
+        feedBackParseRef.totalSize,
+      );
+      const dv = new DataView(mergedBuffer);
+      for (let i = 0; i < nWords; i++) {
+        const offset = i * wordSize;
+        const word = dv.getUint32(offset, false);
+        controller.enqueue(word);
       }
-      const wordsChunk = mergedChunk.slice(0, mergedChunk.size - rest);
-      const resultWords: number[] = [];
-      try {
-        const ab = await wordsChunk.arrayBuffer();
-        const dv = new DataView(ab);
-
-        for (let i = 0; i < ab.byteLength; i = i + wordSize) {
-          // ab is data from network stream (so it's big endian)
-          const word = dv.getUint32(i, false);
-          resultWords.push(word);
-        }
-        return resultWords;
-      } catch (e) {
-        console.error("failed to get arraybuffer from blob", e);
+      feedBackParseRef.chunks = [];
+      feedBackParseRef.totalSize = 0;
+      if (restSize > 0) {
+        const restChunk = mergedBuffer.slice(
+          mergedBuffer.byteLength - restSize,
+        );
+        feedBackParseRef.chunks.push(restChunk);
+        feedBackParseRef.totalSize += restSize;
       }
     }
   };
   return new TransformStream({
-    async transform(chunk, controller) {
+    transform(chunk, controller) {
+      if (!(chunk instanceof ArrayBuffer)) {
+        controller.error(new Error("chunk has unknown binary type"));
+        return;
+      }
+
       feedBackParseRef.chunks.push(chunk);
-      if (chunk instanceof ArrayBuffer) {
-        const chunkSize = (chunk as ArrayBuffer).byteLength;
-        feedBackParseRef.totalSize += chunkSize;
-      } else if (chunk instanceof Blob) {
-        const chunkSize = (chunk as Blob).size;
-        feedBackParseRef.totalSize += chunkSize;
-      } else {
-        console.error(
-          "[dbg] [uint32streamparser] chunk has unknown binary type",
-          chunk,
-        );
-      }
-      const resultWords = await doConsume();
-      for (const word of resultWords ?? []) {
-        controller.enqueue(word);
-      }
+      feedBackParseRef.totalSize += chunk.byteLength;
+      doConsume(controller);
     },
-    async flush(controller) {
-      const resultWords = await doConsume();
-      for (const word of resultWords ?? []) {
-        controller.enqueue(word);
-      }
+    flush(controller) {
+      doConsume(controller);
     },
   });
 }
