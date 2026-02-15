@@ -162,6 +162,8 @@ export type ChatMessageFile = {
   dcId: string;
 
   url?: string;
+  originFile?: File;
+  chunks?: ArrayBuffer[];
 };
 
 export enum ChatMessagePingDirection {
@@ -243,12 +245,8 @@ export type FileTransferStatusEntry = {
   blobChunks?: Blob[];
   arrayBufferChunks?: ArrayBuffer[];
 
-  // it should be the sender put the file here
-  originFile?: File;
-
   closed?: boolean;
   error?: Error;
-  url?: string;
 };
 
 export type ConnTrackStatusEntry = {

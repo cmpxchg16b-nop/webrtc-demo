@@ -48,9 +48,7 @@ const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
 const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
-const defaultFileSegmentSize = 16 * 1024;
-// const defaultDCLowBufThreshold = 16 * 1024 * 1024;
-const defaultDCLowBufThreshold = 16 * 1024 * 1024;
+const defaultFileSegmentSize = 64 * 1024;
 
 function makeConnTrackEntry(): ConnTrackEntry {
   return {
@@ -525,31 +523,41 @@ function closeDCById(
   error: Error | undefined,
   originFile: File | undefined,
 ) {
+  const url = originFile
+    ? URL.createObjectURL(originFile)
+    : URL.createObjectURL(
+        new Blob(
+          prev[remoteNodeId]?.fileTransferStatus?.[dcId]?.arrayBufferChunks ??
+            [],
+        ),
+      );
+
   return {
     ...prev,
     [remoteNodeId]: {
       ...(prev[remoteNodeId] ?? {}),
-      fileTransferStatus: {
-        ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
-        [dcId]: {
-          ...(prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
-            bytesReceived: 0,
-          }),
-          closed: true,
-          error: error,
-          originFile: originFile,
-          url: originFile
-            ? URL.createObjectURL(originFile)
-            : URL.createObjectURL(
-                new Blob(
+      messages: prev[remoteNodeId]?.messages?.map((msg) =>
+        msg.file && msg.file?.dcId === dcId
+          ? {
+              ...msg,
+              file: {
+                ...msg.file,
+                dcId: undefined,
+                url: url,
+                originFile: originFile,
+                chunks:
                   prev[remoteNodeId]?.fileTransferStatus?.[dcId]
                     ?.arrayBufferChunks ?? [],
-                ),
-              ),
-        },
+              },
+            }
+          : msg,
+      ),
+      fileTransferStatus: {
+        ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
+        [dcId]: undefined,
       },
     },
-  };
+  } as ConnTrackStatus;
 }
 
 function sendFeedBackToDC(
@@ -580,10 +588,7 @@ function createFileTransferStatusEntry(
     [remoteNodeId]: {
       ...(prev[remoteNodeId] ?? {}),
       fileTransferStatus: {
-        ...(prev[remoteNodeId]?.fileTransferStatus ?? {}),
-        [dcId]: prev[remoteNodeId]?.fileTransferStatus?.[dcId] ?? {
-          bytesReceived: 0,
-        },
+        [dcId]: { bytesReceived: 0 },
       },
     },
   };
@@ -1301,26 +1306,10 @@ export default function Home() {
                           }
                           return 0;
                         };
-                        const doSendChunks = () => {
-                          while (
-                            fileDC.bufferedAmount <
-                            fileDC.bufferedAmountLowThreshold
-                          ) {
-                            const s = doSendChunk();
-                            if (
-                              s === 0 ||
-                              fileDC.bufferedAmountLowThreshold == 0
-                            ) {
-                              // to prevent infinite loop
-                              break;
-                            }
-                          }
-                        };
-                        fileDC.bufferedAmountLowThreshold =
-                          defaultDCLowBufThreshold;
-                        doSendChunks();
+
+                        doSendChunk();
                         fileDC.onbufferedamountlow = (event) => {
-                          doSendChunks();
+                          doSendChunk();
                         };
 
                         fileDC.onclose = () => {

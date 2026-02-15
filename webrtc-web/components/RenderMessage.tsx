@@ -34,10 +34,6 @@ function RenderFile(props: {
     file,
     fileTransferStatus,
   );
-  let url: string | undefined;
-  if (file.dcId) {
-    url = fileTransferStatus[file.dcId]?.url || file.url;
-  }
 
   return (
     <Fragment>
@@ -57,8 +53,8 @@ function RenderFile(props: {
           ></Box>
         )}
       <Box sx={{ padding: 2 }}>
-        {url ? (
-          <a href={url} download={file.name}>
+        {file.url ? (
+          <a href={file.url} download={file.name}>
             <InsertDriveFile />
             <Box component="span" sx={{ paddingLeft: 0.5 }}>
               {file.name}
