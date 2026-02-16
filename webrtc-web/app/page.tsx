@@ -33,6 +33,11 @@ import {
   styled,
   Tooltip,
   IconButton,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  TextField,
 } from "@mui/material";
 import {
   Dispatch,
@@ -100,7 +105,7 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
       setConns(conns);
     });
 
-  const doConnect = (addr: string) => {
+  const doConnect = (addr: string, advertisedName: string) => {
     setConnecting(true);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
@@ -110,7 +115,7 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
       setConnected(true);
       setConnecting(false);
       const registerPayload: RegisterPayload = {
-        node_name: "",
+        node_name: advertisedName,
       };
       const registerMsg: MessagePayload = {
         register: registerPayload,
@@ -887,6 +892,16 @@ function getUsernameMap(
   return usernameMap;
 }
 
+type WSServer = {
+  url: string;
+  name: string;
+  id: string;
+};
+
+const servers: WSServer[] = [
+  { url: "ws://localhost:3001/ws", name: "Test Server", id: "main" },
+];
+
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
 
@@ -1109,81 +1124,124 @@ export default function Home() {
   };
 
   const usernameMap = getUsernameMap(conns ?? [], nodeId ?? "");
+  const [selectedServer, setSelectedServer] = useState<string>(servers[0].id);
+  const [advertisedName, setAdvertisedName] = useState<string>("");
 
   return (
     <Fragment>
       <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
         <LeftPanel>
-          <Box>
+          {connected ? (
             <Box>
-              {connected ? (
-                <Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 1,
-                      paddingTop: 4,
-                      paddingBottom: 4,
-                    }}
-                  >
-                    <RenderAvatar username={name ?? ""} size="large" />
-                    <Box
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1,
+                  paddingTop: 4,
+                  paddingBottom: 4,
+                }}
+              >
+                <RenderAvatar username={name ?? ""} size="large" />
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 0.5,
+                  }}
+                >
+                  <Box>{name}</Box>
+                  <Tooltip title="Change name">
+                    <IconButton
                       sx={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 0.5,
+                        marginLeft: -4,
+                        position: "relative",
+                        left: "30px",
+                      }}
+                      size="small"
+                      onClick={() => {
+                        setNameEdited(name ?? "");
+                        setShowChangeName(true);
                       }}
                     >
-                      <Box>{name}</Box>
-                      <Tooltip title="Change name">
-                        <IconButton
-                          sx={{
-                            marginLeft: -4,
-                            position: "relative",
-                            left: "30px",
-                          }}
-                          size="small"
-                          onClick={() => {
-                            setNameEdited(name ?? "");
-                            setShowChangeName(true);
-                          }}
-                        >
-                          <Edit fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Box>
-                  <Box>
-                    {conns
-                      .filter((conn) => conn.node_id !== nodeId)
-                      .map((conn) => (
-                        <RenderPeerEntry
-                          conn={conn}
-                          avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
-                          key={conn.node_id}
-                          activeNodeId={activeConn}
-                          onSelect={() => switchActiveConn(conn.node_id)}
-                        />
-                      ))}
-                  </Box>
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
-              ) : (
-                <Box>
-                  <Button
-                    loading={connecting}
-                    onClick={() => {
-                      doConnect(wsAddr);
-                    }}
-                  >
-                    Connect
-                  </Button>
-                </Box>
-              )}
+              </Box>
+              <Box>
+                {conns
+                  .filter((conn) => conn.node_id !== nodeId)
+                  .map((conn) => (
+                    <RenderPeerEntry
+                      conn={conn}
+                      avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
+                      key={conn.node_id}
+                      activeNodeId={activeConn}
+                      onSelect={() => switchActiveConn(conn.node_id)}
+                    />
+                  ))}
+              </Box>
             </Box>
-          </Box>
+          ) : (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                height: "100%",
+              }}
+            >
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "auto 1fr",
+                  gap: 1,
+                  rowGap: 2,
+                  alignItems: "center",
+                  padding: 2,
+                }}
+              >
+                <Box>Choose Server:</Box>
+                <Select
+                  variant="standard"
+                  label="Server"
+                  value={selectedServer}
+                  onChange={(e) => setSelectedServer(e.target.value)}
+                >
+                  {servers.map((server) => (
+                    <MenuItem value={server.id}>{server.name}</MenuItem>
+                  ))}
+                </Select>
+                <Box>Pick a Name:</Box>
+                <TextField
+                  fullWidth
+                  variant="standard"
+                  value={advertisedName}
+                  onChange={(e) => setAdvertisedName(e.target.value)}
+                />
+              </Box>
+              <Box
+                sx={{ display: "flex", justifyContent: "center", marginTop: 2 }}
+              >
+                <Button
+                  variant="contained"
+                  loading={connecting}
+                  disabled={advertisedName.trim() === ""}
+                  onClick={() => {
+                    if (advertisedName.trim() === "") {
+                      return;
+                    }
+                    doConnect(wsAddr, advertisedName.trim());
+                  }}
+                >
+                  Connect
+                </Button>
+              </Box>
+            </Box>
+          )}
         </LeftPanel>
         {activeConn ? (
           <Box
