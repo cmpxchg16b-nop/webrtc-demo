@@ -87,7 +87,6 @@ export function MessageComposer(props: {
     <Paper sx={{ borderRadius: 0 }}>
       <Box
         sx={{
-          borderTop: "1px solid #999",
           display: "flex",
           flexDirection: "row",
           alignItems: "flex-end",

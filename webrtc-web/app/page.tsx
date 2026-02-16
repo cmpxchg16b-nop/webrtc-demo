@@ -22,7 +22,18 @@ import {
   SDPOfferPayload,
 } from "@/apis/types";
 import { ChangeNameDialog } from "@/components/InputDialog";
-import { Box, Button } from "@mui/material";
+import {
+  AccordionActions,
+  AccordionDetails,
+  Accordion,
+  AccordionSummary,
+  Box,
+  Button,
+  Typography,
+  styled,
+  Tooltip,
+  IconButton,
+} from "@mui/material";
 import {
   Dispatch,
   Fragment,
@@ -43,6 +54,9 @@ import {
   newUint32StreamParser,
   wordSize,
 } from "@/utls/streams";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Edit } from "@mui/icons-material";
+import { RenderAvatar } from "@/components/RenderAvatar";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
@@ -855,6 +869,24 @@ function attachPeerConnectionEventListeners(
   };
 }
 
+function getUsernameMap(
+  conns: ConnEntry[],
+  selfNodeId: string,
+): Record<string, string> {
+  let usernameMap: Record<string, string> = {};
+  for (const conn of conns ?? []) {
+    if (conn.entry?.node_name) {
+      usernameMap[conn.node_id] = conn.entry.node_name;
+    }
+  }
+
+  // for test purpose
+  if (!(selfNodeId in usernameMap)) {
+    usernameMap[selfNodeId] = "Me";
+  }
+  return usernameMap;
+}
+
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
 
@@ -1076,17 +1108,7 @@ export default function Home() {
     }
   };
 
-  let usernameMap: Record<string, string> = {};
-  for (const conn of conns ?? []) {
-    if (conn.entry?.node_name) {
-      usernameMap = { ...usernameMap, [conn.node_id]: conn.entry.node_name };
-    }
-  }
-
-  // for test purpose
-  if (!(nodeId in usernameMap)) {
-    usernameMap = { ...usernameMap, [nodeId]: "Me" };
-  }
+  const usernameMap = getUsernameMap(conns ?? [], nodeId ?? "");
 
   return (
     <Fragment>
@@ -1096,33 +1118,56 @@ export default function Home() {
             <Box>
               {connected ? (
                 <Box>
-                  <BasicWsInfo
-                    name={name}
-                    url={wsRef?.current?.url}
-                    rtt={rtt}
-                    nodeId={nodeId}
-                    lastSeq={lastSeq}
-                    upTime={upTime}
-                    onNameChangeRequested={() => {
-                      setNameEdited(name ?? "");
-                      setShowChangeName(true);
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 1,
+                      paddingTop: 4,
+                      paddingBottom: 4,
                     }}
-                  />
-                  <Box>
-                    <Box sx={{ padding: 2 }}>Peers</Box>
-                    <Box>
-                      {conns
-                        .filter((conn) => conn.node_id !== nodeId)
-                        .map((conn) => (
-                          <RenderPeerEntry
-                            conn={conn}
-                            key={conn.node_id}
-                            activeNodeId={activeConn}
-                            onSelect={() => switchActiveConn(conn.node_id)}
-                            rtt={connTrackStatus?.[conn.node_id]?.rtt}
-                          />
-                        ))}
+                  >
+                    <RenderAvatar username={name ?? ""} size="large" />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <Box>{name}</Box>
+                      <Tooltip title="Change name">
+                        <IconButton
+                          sx={{
+                            marginLeft: -4,
+                            position: "relative",
+                            left: "30px",
+                          }}
+                          size="small"
+                          onClick={() => {
+                            setNameEdited(name ?? "");
+                            setShowChangeName(true);
+                          }}
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
+                  </Box>
+                  <Box>
+                    {conns
+                      .filter((conn) => conn.node_id !== nodeId)
+                      .map((conn) => (
+                        <RenderPeerEntry
+                          conn={conn}
+                          avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
+                          key={conn.node_id}
+                          activeNodeId={activeConn}
+                          onSelect={() => switchActiveConn(conn.node_id)}
+                        />
+                      ))}
                   </Box>
                 </Box>
               ) : (
@@ -1140,229 +1185,246 @@ export default function Home() {
             </Box>
           </Box>
         </LeftPanel>
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
+        {activeConn ? (
           <Box
             sx={{
               flex: 1,
-              minHeight: 0,
-              overflow: "auto",
+              minWidth: 0,
               display: "flex",
               flexDirection: "column",
-              gap: 1,
-              padding: 2,
+              overflow: "hidden",
             }}
           >
-            {messages.map((message) => (
-              <RenderMessage
-                message={message}
-                key={message.messageId}
-                onAmend={(amendedMsg) => {
-                  sendAmendMsg(amendedMsg);
-                }}
-                onDelete={(deletedMsgId) => {
-                  sendMsgDeleteRequest(activeConn, deletedMsgId);
-                }}
-                fileTransferStatus={
-                  connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
-                }
-                usernameMap={usernameMap}
-              />
-            ))}
-          </Box>
-          <Box sx={{ flexShrink: 0 }}>
-            <MessageComposer
-              onFile={(filelist) => {
-                if (filelist && filelist.length > 0) {
-                  for (const file of filelist) {
-                    const pc = connTrackRef.current[activeConn]?.peerConnection;
-                    if (pc) {
-                      const fileDC = pc.createDataChannel(
-                        PredefinedDCLabel.File,
-                      );
-                      fileDC.binaryType = "arraybuffer";
-                      fileDC.onopen = () => {
-                        const dcId = fileDC.id?.toString() || "";
-                        const msgObject: ChatMessage = {
-                          messageId: crypto.randomUUID(),
-                          timestamp: Date.now(),
-                          fromNodeId: nodeIdRef.current,
-                          toNodeId: activeConn,
-                          file: {
-                            name: file.name,
-                            type: file.type,
-                            size: file.size,
-                            dcId: dcId,
-                          },
-                        };
-                        sendMsg(msgObject, msgObject.toNodeId);
-                        setConnTrackStatus((prev) => {
-                          return createFileTransferStatusEntry(
-                            prev,
-                            msgObject.toNodeId,
-                            dcId,
-                          );
-                        });
-
-                        const fbStream = createStreamFromDataChannel(
-                          fileDC,
-                        ).pipeThrough(newUint32StreamParser());
-                        const fbReader = fbStream.getReader();
-                        let fbRef: { receivedTotalBytes: number } = {
-                          receivedTotalBytes: 0,
-                        };
-                        const doReadFeedBackStream = ({
-                          value,
-                          done,
-                        }: {
-                          value: any;
-                          done: boolean;
-                        }) => {
-                          if (done) {
-                            return;
-                          }
-                          const chunkSize = value as number;
-
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                padding: 2,
+              }}
+            >
+              {messages.map((message) => (
+                <RenderMessage
+                  message={message}
+                  key={message.messageId}
+                  onAmend={(amendedMsg) => {
+                    sendAmendMsg(amendedMsg);
+                  }}
+                  onDelete={(deletedMsgId) => {
+                    sendMsgDeleteRequest(activeConn, deletedMsgId);
+                  }}
+                  fileTransferStatus={
+                    connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                  }
+                  usernameMap={usernameMap}
+                />
+              ))}
+            </Box>
+            <Box sx={{ flexShrink: 0 }}>
+              <MessageComposer
+                onFile={(filelist) => {
+                  if (filelist && filelist.length > 0) {
+                    for (const file of filelist) {
+                      const pc =
+                        connTrackRef.current[activeConn]?.peerConnection;
+                      if (pc) {
+                        const fileDC = pc.createDataChannel(
+                          PredefinedDCLabel.File,
+                        );
+                        fileDC.binaryType = "arraybuffer";
+                        fileDC.onopen = () => {
+                          const dcId = fileDC.id?.toString() || "";
+                          const msgObject: ChatMessage = {
+                            messageId: crypto.randomUUID(),
+                            timestamp: Date.now(),
+                            fromNodeId: nodeIdRef.current,
+                            toNodeId: activeConn,
+                            file: {
+                              name: file.name,
+                              type: file.type,
+                              size: file.size,
+                              dcId: dcId,
+                            },
+                          };
+                          sendMsg(msgObject, msgObject.toNodeId);
                           setConnTrackStatus((prev) => {
-                            return updateConnTrackStatusByDCData(
+                            return createFileTransferStatusEntry(
                               prev,
                               msgObject.toNodeId,
-                              fileDC,
-                              chunkSize,
+                              dcId,
                             );
                           });
 
-                          fbRef.receivedTotalBytes += chunkSize;
-                          if (fbRef.receivedTotalBytes >= file.size) {
-                            // all chunks have been confirmed to be received by the receiver of the file transfer
-                            fileDC.close();
-                          }
-                          fbReader.read().then(doReadFeedBackStream);
-                        };
-                        fbReader
-                          .read()
-                          .then(doReadFeedBackStream)
-                          .catch((e) =>
-                            console.error("failed to read feed back stream", e),
-                          );
+                          const fbStream = createStreamFromDataChannel(
+                            fileDC,
+                          ).pipeThrough(newUint32StreamParser());
+                          const fbReader = fbStream.getReader();
+                          let fbRef: { receivedTotalBytes: number } = {
+                            receivedTotalBytes: 0,
+                          };
+                          const doReadFeedBackStream = ({
+                            value,
+                            done,
+                          }: {
+                            value: any;
+                            done: boolean;
+                          }) => {
+                            if (done) {
+                              return;
+                            }
+                            const chunkSize = value as number;
 
-                        let sentSizeRef: { value: number } = { value: 0 };
+                            setConnTrackStatus((prev) => {
+                              return updateConnTrackStatusByDCData(
+                                prev,
+                                msgObject.toNodeId,
+                                fileDC,
+                                chunkSize,
+                              );
+                            });
 
-                        const doSendChunk = (maxSize: number) => {
-                          const offset = sentSizeRef.value;
-                          const endLimit = Math.min(
-                            sentSizeRef.value + defaultFileSegmentSize,
-                            file.size,
-                            offset + maxSize + 1,
-                          );
-                          if (endLimit > offset) {
-                            const chunk = file.slice(offset, endLimit);
-                            if (chunk.size > 0) {
-                              sentSizeRef.value += chunk.size;
-                              const s = chunk.size;
-                              try {
-                                fileDC.send(chunk);
-                                return s;
-                              } catch (e) {
-                                console.error("failed to send chunk", e);
+                            fbRef.receivedTotalBytes += chunkSize;
+                            if (fbRef.receivedTotalBytes >= file.size) {
+                              // all chunks have been confirmed to be received by the receiver of the file transfer
+                              fileDC.close();
+                            }
+                            fbReader.read().then(doReadFeedBackStream);
+                          };
+                          fbReader
+                            .read()
+                            .then(doReadFeedBackStream)
+                            .catch((e) =>
+                              console.error(
+                                "failed to read feed back stream",
+                                e,
+                              ),
+                            );
+
+                          let sentSizeRef: { value: number } = { value: 0 };
+
+                          const doSendChunk = (maxSize: number) => {
+                            const offset = sentSizeRef.value;
+                            const endLimit = Math.min(
+                              sentSizeRef.value + defaultFileSegmentSize,
+                              file.size,
+                              offset + maxSize + 1,
+                            );
+                            if (endLimit > offset) {
+                              const chunk = file.slice(offset, endLimit);
+                              if (chunk.size > 0) {
+                                sentSizeRef.value += chunk.size;
+                                const s = chunk.size;
+                                try {
+                                  fileDC.send(chunk);
+                                  return s;
+                                } catch (e) {
+                                  console.error("failed to send chunk", e);
+                                }
                               }
                             }
-                          }
-                          return 0;
-                        };
+                            return 0;
+                          };
 
-                        fileDC.bufferedAmountLowThreshold = 4 * 1024 * 1024;
-                        const doSendChunks = () => {
-                          let freeSpace =
-                            fileDC.bufferedAmountLowThreshold -
-                            fileDC.bufferedAmount;
-                          while (freeSpace >= 0) {
-                            const s = doSendChunk(freeSpace);
-                            if (s === 0) {
-                              break;
+                          fileDC.bufferedAmountLowThreshold = 4 * 1024 * 1024;
+                          const doSendChunks = () => {
+                            let freeSpace =
+                              fileDC.bufferedAmountLowThreshold -
+                              fileDC.bufferedAmount;
+                            while (freeSpace >= 0) {
+                              const s = doSendChunk(freeSpace);
+                              if (s === 0) {
+                                break;
+                              }
+                              freeSpace -= s;
                             }
-                            freeSpace -= s;
-                          }
-                        };
-                        doSendChunks();
-                        fileDC.onbufferedamountlow = (event) => {
+                          };
                           doSendChunks();
-                        };
+                          fileDC.onbufferedamountlow = (event) => {
+                            doSendChunks();
+                          };
 
-                        fileDC.onclose = () => {
-                          setConnTrackStatus((prev) => {
-                            return closeDCById(
-                              prev,
-                              activeConn,
-                              dcId,
-                              undefined,
-                              file,
-                            );
-                          });
+                          fileDC.onclose = () => {
+                            setConnTrackStatus((prev) => {
+                              return closeDCById(
+                                prev,
+                                activeConn,
+                                dcId,
+                                undefined,
+                                file,
+                              );
+                            });
+                          };
+                          fileDC.onerror = (ev) => {
+                            setConnTrackStatus((prev) => {
+                              return closeDCById(
+                                prev,
+                                activeConn,
+                                dcId,
+                                ev.error,
+                                file,
+                              );
+                            });
+                          };
                         };
-                        fileDC.onerror = (ev) => {
-                          setConnTrackStatus((prev) => {
-                            return closeDCById(
-                              prev,
-                              activeConn,
-                              dcId,
-                              ev.error,
-                              file,
-                            );
-                          });
-                        };
-                      };
+                      }
                     }
                   }
-                }
-              }}
-              onPhoto={(filelist) => {
-                // todo
-                // if (filelist && filelist.length > 0) {
-                //   for (const file of filelist) {
-                //     const msgObject: ChatMessage = {
-                //       messageId: crypto.randomUUID(),
-                //       timestamp: Date.now(),
-                //       fromNodeId: nodeIdRef.current,
-                //       toNodeId: activeConn,
-                //     };
-                //     const filePayload: ChatMessageFile = {
-                //       url: "",
-                //       name: file.name,
-                //       type: file.type,
-                //       size: file.size,
-                //     };
-                //     if (file.type.startsWith("image/")) {
-                //       msgObject.image = filePayload;
-                //     } else if (file.type.startsWith("video/")) {
-                //       msgObject.video = filePayload;
-                //     } else {
-                //       msgObject.file = filePayload;
-                //     }
-                //     sendMsg(msgObject, activeConn);
-                //   }
-                // }
-              }}
-              onText={(text) => {
-                const msgObject: ChatMessage = {
-                  messageId: crypto.randomUUID(),
-                  message: text,
-                  timestamp: Date.now(),
-                  fromNodeId: nodeIdRef.current,
-                  toNodeId: activeConn,
-                };
-                sendMsg(msgObject, activeConn);
-              }}
-            />
+                }}
+                onPhoto={(filelist) => {
+                  // todo
+                  // if (filelist && filelist.length > 0) {
+                  //   for (const file of filelist) {
+                  //     const msgObject: ChatMessage = {
+                  //       messageId: crypto.randomUUID(),
+                  //       timestamp: Date.now(),
+                  //       fromNodeId: nodeIdRef.current,
+                  //       toNodeId: activeConn,
+                  //     };
+                  //     const filePayload: ChatMessageFile = {
+                  //       url: "",
+                  //       name: file.name,
+                  //       type: file.type,
+                  //       size: file.size,
+                  //     };
+                  //     if (file.type.startsWith("image/")) {
+                  //       msgObject.image = filePayload;
+                  //     } else if (file.type.startsWith("video/")) {
+                  //       msgObject.video = filePayload;
+                  //     } else {
+                  //       msgObject.file = filePayload;
+                  //     }
+                  //     sendMsg(msgObject, activeConn);
+                  //   }
+                  // }
+                }}
+                onText={(text) => {
+                  const msgObject: ChatMessage = {
+                    messageId: crypto.randomUUID(),
+                    message: text,
+                    timestamp: Date.now(),
+                    fromNodeId: nodeIdRef.current,
+                    toNodeId: activeConn,
+                  };
+                  sendMsg(msgObject, activeConn);
+                }}
+              />
+            </Box>
           </Box>
-        </Box>
+        ) : (
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            Select a chat to start messaging
+          </Box>
+        )}
       </Box>
       <ChangeNameDialog
         name={nameEdited}

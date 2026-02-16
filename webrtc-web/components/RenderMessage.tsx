@@ -8,6 +8,7 @@ import {
 import { InsertDriveFile } from "@mui/icons-material";
 import { Box, Card } from "@mui/material";
 import { Fragment } from "react/jsx-runtime";
+import { RenderAvatar } from "./RenderAvatar";
 
 function getFileLoadedRatio(
   file: ChatMessageFile,
@@ -76,31 +77,6 @@ function RenderFile(props: {
   );
 }
 
-function RenderUsername(props: { username: string }) {
-  const { username } = props;
-  const firstCap =
-    username && username.length > 0 ? username[0].toUpperCase() : "";
-  return (
-    <Box
-      sx={{
-        width: "48px",
-        height: "48px",
-        backgroundColor: "orange",
-        borderRadius: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: "bold",
-        fontSize: "1.5rem",
-        flexShrink: 0,
-        color: "white",
-      }}
-    >
-      {firstCap}
-    </Box>
-  );
-}
-
 export function RenderMessage(props: {
   message: ChatMessage;
   onAmend?: (amendedMsg: ChatMessage) => void;
@@ -122,13 +98,13 @@ export function RenderMessage(props: {
         width: "max-content",
       }}
     >
-      <RenderUsername username={username} />
+      <RenderAvatar username={username} />
       <Box
         sx={{
           gap: 1,
           flexWrap: "wrap",
           flex: 1,
-          width: "max-content",
+
           maxWidth: "100%",
           position: "relative",
           display: "flex",
@@ -176,8 +152,9 @@ export function RenderMessage(props: {
                 whiteSpace: "pre-wrap",
                 wordWrap: "break-word",
                 hyphens: "manual",
-                hyphenateCharacter: "-",
-                hyphenateLimitChars: 0,
+                hyphenateCharacter: '"-"',
+                maxWidth: "100%",
+                width: "max-content",
               }}
             >
               {message.message}

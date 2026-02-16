@@ -1,15 +1,17 @@
 "use client";
 
-import { ConnEntry } from "@/apis/types";
+import { ConnEntry, ConnTrackStatus, ConnTrackStatusEntry } from "@/apis/types";
 import { MenuItem, Typography } from "@mui/material";
+import { RenderAvatar } from "./RenderAvatar";
 
 export function RenderPeerEntry(props: {
   conn: ConnEntry;
+  avatarUrl?: string;
   activeNodeId: string;
   onSelect: () => void;
   rtt?: number;
 }) {
-  const { conn, activeNodeId, onSelect, rtt } = props;
+  const { conn, avatarUrl, activeNodeId, onSelect, rtt } = props;
   return (
     <MenuItem
       selected={activeNodeId === conn.node_id}
@@ -20,9 +22,14 @@ export function RenderPeerEntry(props: {
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
+        gap: 1,
       }}
     >
+      <RenderAvatar
+        username={conn.entry?.node_name || conn.node_id}
+        url={avatarUrl}
+        size="small"
+      />
       {conn.entry?.node_name || conn.node_id}
       {rtt !== undefined && (
         <Typography

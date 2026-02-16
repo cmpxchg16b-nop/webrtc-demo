@@ -264,6 +264,8 @@ export type ConnTrackStatusEntry = {
 
   // key is the id of the data channel that actually transmit the file data,
   fileTransferStatus?: Record<string, FileTransferStatusEntry>;
+
+  avatarUrl?: string;
 };
 
 // key is the node_id of remote peer
