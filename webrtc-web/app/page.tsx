@@ -2,7 +2,6 @@
 
 import {
   ChatMessage,
-  ChatMessageFile,
   ChatMessagePing,
   ChatMessagePingDirection,
   ConnEntry,
@@ -20,23 +19,16 @@ import {
   RegisterPayload,
   RenamePayload,
   SDPOfferPayload,
+  WSServer,
 } from "@/apis/types";
 import { ChangeNameDialog } from "@/components/InputDialog";
 import {
-  AccordionActions,
-  AccordionDetails,
-  Accordion,
-  AccordionSummary,
   Box,
   Button,
-  Typography,
-  styled,
   Tooltip,
   IconButton,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
   TextField,
 } from "@mui/material";
 import {
@@ -50,7 +42,6 @@ import {
 } from "react";
 import { LeftPanel } from "@/components/LeftPanel";
 import { getConns } from "@/apis/conns";
-import { BasicWsInfo } from "@/components/BasicWsInfo";
 import { RenderPeerEntry } from "@/components/RenderPeerEntry";
 import { RenderMessage } from "@/components/RenderMessage";
 import { MessageComposer } from "@/components/MessageComposer";
@@ -59,20 +50,18 @@ import {
   newUint32StreamParser,
   wordSize,
 } from "@/utls/streams";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Edit } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
-const wsAddr = "ws://localhost:3001/ws";
 const pingIntvMs = 1000;
 const defaultFileSegmentSize = 128 * 1024;
 
-function makeConnTrackEntry(): ConnTrackEntry {
+function makeConnTrackEntry(iceServers: string[]): ConnTrackEntry {
   return {
     peerConnection: new RTCPeerConnection({
-      iceServers: [{ urls: googleStunServer }],
+      iceServers: [{ urls: iceServers }],
     }),
     remoteOffers: [],
     queuedICEOffers: [],
@@ -105,7 +94,11 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
       setConns(conns);
     });
 
-  const doConnect = (addr: string, advertisedName: string) => {
+  const doConnect = (
+    addr: string,
+    advertisedName: string,
+    iceServers: string[],
+  ) => {
     setConnecting(true);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
@@ -211,7 +204,7 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
               `[dbg] [${logSource}] automatically accepting SDP offer from remote peer`,
               remoteNodeId,
             );
-            const ent = makeConnTrackEntry();
+            const ent = makeConnTrackEntry(iceServers);
             connTrackRef.current[remoteNodeId] = ent;
             console.log(
               `[dbg] [${logSource}] initializing conn track entry for remote peer`,
@@ -892,14 +885,13 @@ function getUsernameMap(
   return usernameMap;
 }
 
-type WSServer = {
-  url: string;
-  name: string;
-  id: string;
-};
-
 const servers: WSServer[] = [
-  { url: "ws://localhost:3001/ws", name: "Test Server", id: "main" },
+  {
+    url: "ws://localhost:3001/ws",
+    name: "Test Server",
+    id: "test",
+    iceServers: [googleStunServer],
+  },
 ];
 
 export default function Home() {
@@ -926,13 +918,14 @@ export default function Home() {
   const [nameEdited, setNameEdited] = useState<string>("");
   const [activeConn, setActiveConn] = useState("");
   const [showChangeName, setShowChangeName] = useState(false);
-  const switchActiveConn = (remoteNodeId: string) => {
+
+  const switchActiveConn = (remoteNodeId: string, iceServers: string[]) => {
     const logSource = "initiator";
     setActiveConn(remoteNodeId);
 
     let ent = connTrackRef.current[remoteNodeId];
     if (!ent) {
-      ent = makeConnTrackEntry();
+      ent = makeConnTrackEntry(iceServers);
       connTrackRef.current[remoteNodeId] = ent;
 
       attachPeerConnectionEventListeners(
@@ -1180,7 +1173,14 @@ export default function Home() {
                       avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
                       key={conn.node_id}
                       activeNodeId={activeConn}
-                      onSelect={() => switchActiveConn(conn.node_id)}
+                      onSelect={() => {
+                        const server = servers.find(
+                          (server) => server.id === selectedServer,
+                        );
+                        if (server) {
+                          switchActiveConn(conn.node_id, server.iceServers);
+                        }
+                      }}
                     />
                   ))}
               </Box>
@@ -1234,7 +1234,16 @@ export default function Home() {
                     if (advertisedName.trim() === "") {
                       return;
                     }
-                    doConnect(wsAddr, advertisedName.trim());
+                    const server = servers.find(
+                      (server) => server.id === selectedServer,
+                    );
+                    if (server) {
+                      doConnect(
+                        server.url,
+                        advertisedName.trim(),
+                        server.iceServers,
+                      );
+                    }
                   }}
                 >
                   Connect

@@ -298,3 +298,10 @@ export type ConnTrackEntry = {
 
   pingSeqRef?: PingStateRef;
 };
+
+export type WSServer = {
+  url: string;
+  name: string;
+  id: string;
+  iceServers: string[];
+};
