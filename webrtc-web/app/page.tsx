@@ -1531,6 +1531,24 @@ export default function Home() {
                     toNodeId: activeConn,
                   };
                   sendMsg(msgObject, activeConn);
+                  const dc = connTrackRef.current?.[activeConn]?.dataChannel;
+                  if (dc) {
+                    const evListenerId = crypto.randomUUID();
+                    const evListener = (ev: any) => {
+                      console.log(
+                        "[dbg] named data event",
+                        ev.data,
+                        "from handler",
+                        evListenerId,
+                      );
+                      dc.removeEventListener("message", evListener);
+                    };
+                    dc.addEventListener("message", evListener);
+                    console.log(
+                      "[dbg] added data event listener",
+                      evListenerId,
+                    );
+                  }
                 }}
               />
             </Box>

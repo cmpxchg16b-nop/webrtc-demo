@@ -78,6 +78,63 @@ function RenderFile(props: {
   );
 }
 
+function RenderGenericAttachment(props: {
+  file: ChatMessageFile;
+  alt: string;
+  fileTransferStatus: Record<string, FileTransferStatusEntry>;
+}) {
+  const { file, fileTransferStatus } = props;
+  const alt = props.alt || "attachment";
+  if (file.category === ChatMessageFileCategory.Image) {
+    if (file.url) {
+      return <img style={{ maxHeight: "240px" }} src={file.url} alt={alt} />;
+    } else if (file.thumbnail?.dataURL) {
+      return (
+        <img
+          style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
+          src={file?.thumbnail?.dataURL}
+          alt={alt}
+        />
+      );
+    } else {
+      return (
+        <Box
+          sx={{ height: "240px", width: "240px", backgroundColor: "#000" }}
+        ></Box>
+      );
+    }
+  } else if (file.category === ChatMessageFileCategory.Video) {
+    if (file.url) {
+      return (
+        <video
+          autoPlay={false}
+          controls
+          style={{ maxHeight: "240px" }}
+          src={file.url}
+        />
+      );
+    } else if (file.thumbnail?.dataURL) {
+      return (
+        <img
+          style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
+          src={file?.thumbnail?.dataURL}
+          alt={alt}
+        />
+      );
+    } else {
+      return (
+        <Box
+          sx={{ height: "240px", width: "240px", backgroundColor: "#000" }}
+        ></Box>
+      );
+    }
+  } else if (file.category === ChatMessageFileCategory.File) {
+    return <RenderFile file={file} fileTransferStatus={fileTransferStatus} />;
+  } else {
+    return <Box>Unknown attachment</Box>;
+  }
+}
+
 export function RenderMessage(props: {
   message: ChatMessage;
   onAmend?: (amendedMsg: ChatMessage) => void;
@@ -125,52 +182,13 @@ export function RenderMessage(props: {
             position: "relative",
           }}
         >
-          {message.file &&
-          message.file.category === ChatMessageFileCategory.Image &&
-          message.file.url ? (
-            <img
-              style={{ maxHeight: "240px" }}
-              src={message.file.url}
-              alt={message.message}
+          {message.file && (
+            <RenderGenericAttachment
+              file={message.file}
+              alt={message.message || ""}
+              fileTransferStatus={fileTransferStatus}
             />
-          ) : message.file?.thumbnail?.dataURL ? (
-            <img
-              style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
-              src={message.file?.thumbnail?.dataURL}
-              alt={message.message}
-            />
-          ) : (
-            <Box
-              sx={{ height: "240px", width: "240px", backgroundColor: "#000" }}
-            ></Box>
           )}
-          {message.file &&
-          message.file.category === ChatMessageFileCategory.Video &&
-          message.file.url ? (
-            <video
-              autoPlay={false}
-              controls
-              style={{ maxHeight: "240px" }}
-              src={message.file.url}
-            />
-          ) : message.file?.thumbnail?.dataURL ? (
-            <img
-              style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
-              src={message.file?.thumbnail?.dataURL}
-              alt={message.message}
-            />
-          ) : (
-            <Box
-              sx={{ height: "240px", width: "240px", backgroundColor: "#000" }}
-            ></Box>
-          )}
-          {message.file &&
-            message.file.category === ChatMessageFileCategory.File && (
-              <RenderFile
-                file={message.file}
-                fileTransferStatus={fileTransferStatus}
-              />
-            )}
           {message.message && (
             <Box
               sx={{
