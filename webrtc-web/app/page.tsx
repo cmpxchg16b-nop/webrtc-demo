@@ -1119,6 +1119,7 @@ export default function Home() {
   const usernameMap = getUsernameMap(conns ?? [], nodeId ?? "");
   const [selectedServer, setSelectedServer] = useState<string>(servers[0].id);
   const [advertisedName, setAdvertisedName] = useState<string>("");
+  const [searchKw, setSearchKw] = useState<string>("");
 
   return (
     <Fragment>
@@ -1133,7 +1134,7 @@ export default function Home() {
                   alignItems: "center",
                   gap: 1,
                   paddingTop: 4,
-                  paddingBottom: 4,
+                  paddingBottom: 0,
                 }}
               >
                 <RenderAvatar username={name ?? ""} size="large" />
@@ -1164,9 +1165,22 @@ export default function Home() {
                   </Tooltip>
                 </Box>
               </Box>
+              <Box sx={{ padding: 2 }}>
+                <TextField
+                  label="Search by name"
+                  value={searchKw}
+                  onChange={(e) => setSearchKw(e.target.value)}
+                  fullWidth
+                  variant="standard"
+                />
+              </Box>
               <Box>
                 {conns
                   .filter((conn) => conn.node_id !== nodeId)
+                  .filter(
+                    (conn) =>
+                      !searchKw || conn.entry?.node_name?.includes(searchKw),
+                  )
                   .map((conn) => (
                     <RenderPeerEntry
                       conn={conn}
