@@ -3,6 +3,7 @@
 import {
   ChatMessage,
   ChatMessageFile,
+  ChatMessageFileCategory,
   FileTransferStatusEntry,
 } from "@/apis/types";
 import { InsertDriveFile } from "@mui/icons-material";
@@ -124,27 +125,32 @@ export function RenderMessage(props: {
             position: "relative",
           }}
         >
-          {message.image && (
-            <img
-              style={{ maxHeight: "240px" }}
-              src={message.image.url}
-              alt={message.message}
-            />
-          )}
-          {message.video && (
-            <video
-              autoPlay={false}
-              controls
-              style={{ maxHeight: "240px" }}
-              src={message.video.url}
-            />
-          )}
-          {message.file && (
-            <RenderFile
-              file={message.file}
-              fileTransferStatus={fileTransferStatus}
-            />
-          )}
+          {message.file &&
+            message.file.category === ChatMessageFileCategory.Image &&
+            message.file.url && (
+              <img
+                style={{ maxHeight: "240px" }}
+                src={message.file.url}
+                alt={message.message}
+              />
+            )}
+          {message.file &&
+            message.file.category === ChatMessageFileCategory.Video &&
+            message.file.url && (
+              <video
+                autoPlay={false}
+                controls
+                style={{ maxHeight: "240px" }}
+                src={message.file.url}
+              />
+            )}
+          {message.file &&
+            message.file.category === ChatMessageFileCategory.File && (
+              <RenderFile
+                file={message.file}
+                fileTransferStatus={fileTransferStatus}
+              />
+            )}
           {message.message && (
             <Box
               sx={{

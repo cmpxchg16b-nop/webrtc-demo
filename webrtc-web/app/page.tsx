@@ -2,6 +2,7 @@
 
 import {
   ChatMessage,
+  ChatMessageFileCategory,
   ChatMessagePing,
   ChatMessagePingDirection,
   ConnEntry,
@@ -53,6 +54,7 @@ import {
 } from "@/utls/streams";
 import { Edit } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
+import { createThumbnailFromFile } from "@/apis/thumbnail";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
@@ -1324,6 +1326,7 @@ export default function Home() {
             <Box sx={{ flexShrink: 0 }}>
               <MessageComposer
                 onFile={(filelist) => {
+                  const fileCat = ChatMessageFileCategory.File;
                   if (filelist && filelist.length > 0) {
                     for (const file of filelist) {
                       const pc =
@@ -1341,6 +1344,7 @@ export default function Home() {
                             fromNodeId: nodeIdRef.current,
                             toNodeId: activeConn,
                             file: {
+                              category: fileCat,
                               name: file.name,
                               type: file.type,
                               size: file.size,
@@ -1472,6 +1476,26 @@ export default function Home() {
                   }
                 }}
                 onPhoto={(filelist) => {
+                  createThumbnailFromFile(filelist[0])
+                    .then((thumbnail) => {
+                      const image = document.createElement("img");
+                      image.src = thumbnail.dataURL;
+                      image.setAttribute(
+                        "style",
+                        "position: fixed; top: 0; left: 0; width: 300px; height: 300px; object-fit: cover;",
+                      );
+                      document.body.appendChild(image);
+                      alert("image appended");
+                    })
+                    .catch((e) => {
+                      console.error("failed to create thumbnail", e);
+                    });
+
+                  // photo media is mostly akin to a file, except that
+                  // a thumbnail image is needed to send to the receiver in advance.
+
+                  // todo: create a (low resolution) thumbnail image file
+
                   // todo
                   // if (filelist && filelist.length > 0) {
                   //   for (const file of filelist) {

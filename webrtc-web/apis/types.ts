@@ -151,7 +151,23 @@ export type ChatMessageFileLoading = {
   completed?: boolean;
 };
 
+export enum ChatMessageFileCategory {
+  File = "file",
+  Image = "image",
+  Video = "video",
+}
+
+export type ChatMessageFileThumbnail = {
+  dataURL: string;
+  mime: string;
+};
+
 export type ChatMessageFile = {
+  category: ChatMessageFileCategory;
+
+  // thumbnail only present when category is ChatMessageFileCategory.Image or ChatMessageFileCategory.Video
+  thumbnail?: ChatMessageFileThumbnail;
+
   name?: string;
   // size is the total size of the file content, not the transferred(or received) size
   size?: number;
@@ -208,8 +224,6 @@ export type ChatMessage = {
   toNodeId: string;
   timestamp: number;
 
-  image?: ChatMessageFile;
-  video?: ChatMessageFile;
   file?: ChatMessageFile;
   ping?: ChatMessagePing;
 
@@ -275,7 +289,6 @@ export enum PredefinedDCLabel {
   Chat = "chat",
   File = "file",
   Ping = "ping",
-  // todo: ping, image, video, etc.
 }
 
 export type PingStateRef = {
