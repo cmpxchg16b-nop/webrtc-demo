@@ -1056,7 +1056,7 @@ function sendMsg(
 
 function transmitFileViaPC(
   pc: RTCPeerConnection,
-  dc: RTCDataChannel,
+  chatDC: RTCDataChannel,
   fromNodeId: string,
   toNodeId: string,
   fileCat: ChatMessageFileCategory,
@@ -1081,7 +1081,7 @@ function transmitFileViaPC(
       },
     };
 
-    sendMsg(dc, msgObject, msgObject.toNodeId, setConnTrackStatus)
+    sendMsg(chatDC, msgObject, msgObject.toNodeId, setConnTrackStatus)
       .then((msgObject) => {
         setConnTrackStatus((prev) => {
           return createFileTransferStatusEntry(prev, msgObject.toNodeId, dcId);
@@ -1537,14 +1537,16 @@ export default function Home() {
                 onFile={(filelist) => {
                   const fileCat = ChatMessageFileCategory.File;
                   const pc = connTrackRef.current[activeConn]?.peerConnection;
-                  const dc = connTrackRef.current[activeConn]?.dataChannel;
-                  if (filelist && filelist.length > 0 && pc && dc) {
+                  const chatDC = connTrackRef.current[activeConn]?.dataChannel;
+                  const fromNodeId = nodeIdRef.current;
+                  const toNodeId = activeConn;
+                  if (filelist && filelist.length > 0 && pc && chatDC) {
                     for (const file of filelist) {
                       transmitFileViaPC(
                         pc,
-                        dc,
-                        nodeIdRef.current,
-                        activeConn,
+                        chatDC,
+                        fromNodeId,
+                        toNodeId,
                         fileCat,
                         file,
                         setConnTrackStatus,
