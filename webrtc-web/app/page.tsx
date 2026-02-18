@@ -3,6 +3,7 @@
 import {
   ChatMessage,
   ChatMessageFileCategory,
+  ChatMessageFileThumbnail,
   ChatMessagePing,
   ChatMessagePingDirection,
   ConnEntry,
@@ -530,12 +531,17 @@ function closeDCById(
   error: Error | undefined,
   originFile: File | undefined,
 ) {
+  const activeMsg = prev[remoteNodeId]?.messages?.find(
+    (msg) => msg.file?.dcId === dcId,
+  );
   const url = originFile
     ? URL.createObjectURL(originFile)
     : URL.createObjectURL(
-        new Blob(
+        new File(
           prev[remoteNodeId]?.fileTransferStatus?.[dcId]?.arrayBufferChunks ??
             [],
+          activeMsg?.file?.name ?? "unknownfile",
+          { type: activeMsg?.file?.type ?? "application/octet-stream" },
         ),
       );
 
@@ -1064,6 +1070,7 @@ function transmitFileViaPC(
   fileCat: ChatMessageFileCategory,
   file: File,
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
+  thumbnail: ChatMessageFileThumbnail | undefined,
 ) {
   const fileDC = pc.createDataChannel(PredefinedDCLabel.File);
   fileDC.binaryType = "arraybuffer";
@@ -1081,6 +1088,7 @@ function transmitFileViaPC(
         type: file.type,
         size: file.size,
         dcId: dcId,
+        thumbnail: thumbnail,
       },
     };
 
@@ -1575,56 +1583,44 @@ export default function Home() {
                         fileCat,
                         file,
                         setConnTrackStatus,
+                        undefined,
                       );
                     }
                   }
                 }}
                 onPhoto={(filelist) => {
-                  createThumbnailFromFile(filelist[0])
-                    .then((thumbnail) => {
-                      const image = document.createElement("img");
-                      image.src = thumbnail.dataURL;
-                      image.setAttribute(
-                        "style",
-                        "position: fixed; top: 0; left: 0; width: 300px; height: 300px; object-fit: cover;",
-                      );
-                      document.body.appendChild(image);
-                      alert("image appended");
-                    })
-                    .catch((e) => {
-                      console.error("failed to create thumbnail", e);
-                    });
-
-                  // photo media is mostly akin to a file, except that
-                  // a thumbnail image is needed to send to the receiver in advance.
-
-                  // todo: create a (low resolution) thumbnail image file
-
-                  // todo
-                  // if (filelist && filelist.length > 0) {
-                  //   for (const file of filelist) {
-                  //     const msgObject: ChatMessage = {
-                  //       messageId: crypto.randomUUID(),
-                  //       timestamp: Date.now(),
-                  //       fromNodeId: nodeIdRef.current,
-                  //       toNodeId: activeConn,
-                  //     };
-                  //     const filePayload: ChatMessageFile = {
-                  //       url: "",
-                  //       name: file.name,
-                  //       type: file.type,
-                  //       size: file.size,
-                  //     };
-                  //     if (file.type.startsWith("image/")) {
-                  //       msgObject.image = filePayload;
-                  //     } else if (file.type.startsWith("video/")) {
-                  //       msgObject.video = filePayload;
-                  //     } else {
-                  //       msgObject.file = filePayload;
-                  //     }
-                  //     sendMsg(msgObject, activeConn);
-                  //   }
-                  // }
+                  const pc = connTrackRef.current[activeConn]?.peerConnection;
+                  const chatDC = connTrackRef.current[activeConn]?.dataChannel;
+                  const fromNodeId = nodeIdRef.current;
+                  const toNodeId = activeConn;
+                  if (filelist && filelist.length > 0 && pc && chatDC) {
+                    for (const file of filelist) {
+                      let fileCat = ChatMessageFileCategory.Image;
+                      if (file.type.startsWith("video/")) {
+                        fileCat = ChatMessageFileCategory.Video;
+                      }
+                      createThumbnailFromFile(file)
+                        .then((thumbnail) => {
+                          transmitFileViaPC(
+                            pc,
+                            chatDC,
+                            fromNodeId,
+                            toNodeId,
+                            fileCat,
+                            file,
+                            setConnTrackStatus,
+                            thumbnail,
+                          );
+                        })
+                        .catch((e) => {
+                          console.error(
+                            "failed to create thumbnail for file",
+                            file.name,
+                            e,
+                          );
+                        });
+                    }
+                  }
                 }}
                 onText={(text) => {
                   const dc = connTrackRef.current[activeConn]?.dataChannel;
