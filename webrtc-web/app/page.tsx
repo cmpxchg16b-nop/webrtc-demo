@@ -57,6 +57,7 @@ import {
 import { Edit } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
 import { createThumbnailFromFile } from "@/apis/thumbnail";
+import { useUnreads } from "@/apis/unreads";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
@@ -427,8 +428,7 @@ function updateConnTrackStatusByMsgObject(
       (msg) => msg.messageId === msgObject.messageId,
     );
     if (idx === -1) {
-      // Mark as unread for messages received from remote peers
-      messages.push({ ...msgObject, unread: true });
+      messages.push(msgObject);
     }
   }
 
@@ -1131,16 +1131,6 @@ function transmitFileViaPC(
   };
 }
 
-function getUnreadPeerMessages(
-  ourNodeId: string,
-  messages: ChatMessage[],
-): string[] {
-  return messages
-    .filter((msg) => msg.unread === true && msg.fromNodeId !== ourNodeId)
-    .sort((msgA, msgB) => msgA.timestamp - msgB.timestamp)
-    .map((msg) => msg.messageId);
-}
-
 function getVisibleMessageIds(
   msgsBoxRef: RefObject<HTMLDivElement | null>,
 ): string[] {
@@ -1177,19 +1167,15 @@ function getVisibleMessageIds(
 function sortConnsByLatestUnread(
   connEntries: ConnEntry[],
   connTrackStatus: ConnTrackStatus,
-  ourNodeId: string,
+  unreadMsgIds: Set<string>,
 ) {
   return connEntries.sort((connA, connB) => {
     const messagesA = connTrackStatus[connA.node_id]?.messages ?? [];
     const messagesB = connTrackStatus[connB.node_id]?.messages ?? [];
 
     // Get unread messages for each connection (messages from the remote peer that are unread)
-    const unreadA = messagesA.filter(
-      (msg) => msg.unread === true && msg.fromNodeId !== ourNodeId,
-    );
-    const unreadB = messagesB.filter(
-      (msg) => msg.unread === true && msg.fromNodeId !== ourNodeId,
-    );
+    const unreadA = messagesA.filter((msg) => unreadMsgIds.has(msg.messageId));
+    const unreadB = messagesB.filter((msg) => unreadMsgIds.has(msg.messageId));
 
     // If connA has unread messages and connB doesn't, connA comes first
     if (unreadA.length > 0 && unreadB.length === 0) {
@@ -1432,12 +1418,7 @@ export default function Home() {
   const [searchKw, setSearchKw] = useState<string>("");
 
   const msgsBoxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    console.log("[dbg] messages changed");
-    const visibleIds = getVisibleMessageIds(msgsBoxRef);
-    console.log("[dbg] visible message IDs:", visibleIds);
-  }, [messages]);
+  const { getUnreadMessages } = useUnreads();
 
   return (
     <Fragment>
@@ -1501,7 +1482,7 @@ export default function Home() {
                         !searchKw || conn.entry?.node_name?.includes(searchKw),
                     ),
                   connTrackStatus,
-                  nodeId,
+                  getUnreadMessages(),
                 ).map((conn) => {
                   const peerMessages =
                     connTrackStatus?.[conn.node_id]?.messages ?? [];
