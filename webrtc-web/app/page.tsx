@@ -1137,6 +1137,7 @@ function getUnreadPeerMessages(
 ): string[] {
   return messages
     .filter((msg) => msg.unread === true && msg.fromNodeId !== ourNodeId)
+    .sort((msgA, msgB) => msgA.timestamp - msgB.timestamp)
     .map((msg) => msg.messageId);
 }
 
@@ -1539,6 +1540,99 @@ export default function Home() {
 
   const msgsBoxRef = useRef<HTMLDivElement>(null);
 
+  // Mock peer entries for UI preview
+  const mockPeerEntries = useMemo<
+    Array<{
+      conn: ConnEntry;
+      rtt?: number;
+      numUnreads?: number;
+      latestUnreadMessage?: ChatMessage;
+    }>
+  >(() => {
+    return [
+      {
+        conn: {
+          node_id: "mock-peer-1",
+          registered_at: 1700000000000,
+          entry: {
+            node_name: "Alice",
+            connected_at: 1700000000000,
+            authentication: "jwt",
+          },
+        },
+        rtt: 42,
+      },
+      {
+        conn: {
+          node_id: "mock-peer-2",
+          registered_at: 1700000100000,
+          entry: {
+            node_name: "Bob",
+            connected_at: 1700000100000,
+            authentication: "jwt",
+          },
+        },
+        rtt: 128,
+        numUnreads: 3,
+        latestUnreadMessage: {
+          messageId: "mock-msg-1",
+          fromNodeId: "mock-peer-2",
+          toNodeId: nodeId ?? "local",
+          timestamp: 1700000200000,
+          message: "Hey! Are you free for a call today?",
+        },
+      },
+      {
+        conn: {
+          node_id: "mock-peer-3",
+          registered_at: 1700000200000,
+          entry: {
+            node_name: "Charlie",
+            connected_at: 1700000200000,
+            authentication: "jwt",
+          },
+        },
+        rtt: 256,
+        numUnreads: 99,
+        latestUnreadMessage: {
+          messageId: "mock-msg-2",
+          fromNodeId: "mock-peer-3",
+          toNodeId: nodeId ?? "local",
+          timestamp: 1700000300000,
+          message: "Check out this amazing photo I took yesterday!",
+          file: {
+            category: {} as ChatMessageFileCategory,
+            dcId: "mock-dc",
+            name: "vacation_photo.jpg",
+          },
+        },
+      },
+      {
+        conn: {
+          node_id: "mock-peer-4",
+          registered_at: 1700000300000,
+          entry: {
+            node_name: "Diana",
+            connected_at: 1700000300000,
+            authentication: "jwt",
+          },
+        },
+        numUnreads: 1,
+        latestUnreadMessage: {
+          messageId: "mock-msg-3",
+          fromNodeId: "mock-peer-4",
+          toNodeId: nodeId ?? "local",
+          timestamp: 1700000400000,
+          file: {
+            category: {} as ChatMessageFileCategory,
+            dcId: "mock-dc-2",
+            name: "document.pdf",
+          },
+        },
+      },
+    ];
+  }, [nodeId]);
+
   useEffect(() => {
     console.log("[dbg] messages changed");
     const visibleIds = getVisibleMessageIds(msgsBoxRef);
@@ -1605,23 +1699,55 @@ export default function Home() {
                     (conn) =>
                       !searchKw || conn.entry?.node_name?.includes(searchKw),
                   )
-                  .map((conn) => (
+                  .map((conn) => {
+                    const peerMessages =
+                      connTrackStatus?.[conn.node_id]?.messages ?? [];
+                    const unreadPeerMsgs = peerMessages.filter(
+                      (msg) =>
+                        msg.unread === true && msg.fromNodeId === conn.node_id,
+                    );
+                    const numUnreads = unreadPeerMsgs.length;
+                    const latestUnreadMessage = unreadPeerMsgs.sort(
+                      (a, b) => b.timestamp - a.timestamp,
+                    )[0];
+                    return (
+                      <RenderPeerEntry
+                        conn={conn}
+                        avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
+                        key={conn.node_id}
+                        activeNodeId={activeConn}
+                        onSelect={() => {
+                          const server = servers.find(
+                            (server) => server.id === selectedServer,
+                          );
+                          if (server) {
+                            switchActiveConn(conn.node_id, server.iceServers);
+                          }
+                        }}
+                        numUnreads={numUnreads}
+                        latestUnreadMessage={latestUnreadMessage}
+                      />
+                    );
+                  })}
+              </Box>
+              {/* Mock RenderPeerEntry for UI preview */}
+              {mockPeerEntries.length > 0 && (
+                <Box
+                  sx={{ marginTop: 4, padding: 2, borderTop: "1px solid #ccc" }}
+                >
+                  {mockPeerEntries.map((entry) => (
                     <RenderPeerEntry
-                      conn={conn}
-                      avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
-                      key={conn.node_id}
+                      key={entry.conn.node_id}
+                      conn={entry.conn}
                       activeNodeId={activeConn}
-                      onSelect={() => {
-                        const server = servers.find(
-                          (server) => server.id === selectedServer,
-                        );
-                        if (server) {
-                          switchActiveConn(conn.node_id, server.iceServers);
-                        }
-                      }}
+                      onSelect={() => {}}
+                      rtt={entry.rtt}
+                      numUnreads={entry.numUnreads}
+                      latestUnreadMessage={entry.latestUnreadMessage}
                     />
                   ))}
-              </Box>
+                </Box>
+              )}
             </Box>
           ) : (
             <Box

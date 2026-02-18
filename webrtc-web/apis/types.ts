@@ -155,6 +155,8 @@ export enum ChatMessageFileCategory {
   File = "file",
   Image = "image",
   Video = "video",
+  Audio = "audio",
+  Document = "document",
 }
 
 export type ChatMessageFileThumbnail = {
