@@ -13,9 +13,14 @@ import {
   Typography,
   CircularProgress,
   CircularProgressProps,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from "@mui/material";
 import { Fragment } from "react/jsx-runtime";
 import { RenderAvatar } from "./RenderAvatar";
+import { useRef, useState } from "react";
+import { SP } from "next/dist/shared/lib/utils";
 
 function getFileLoadedRatio(
   file: ChatMessageFile,
@@ -142,6 +147,92 @@ function ThumbnailWithProgress(props: {
   );
 }
 
+function RenderVideo(props: { url: string }) {
+  const { url } = props;
+  const [showPreview, setShowPreview] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleMouseEnter = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.play().catch((e) => {
+        console.error("failed to play/resume video, because:", e);
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+    }
+  };
+
+  return (
+    <Fragment>
+      <video
+        ref={videoRef}
+        autoPlay={false}
+        controls={false}
+        style={{ maxHeight: "240px", cursor: "pointer" }}
+        src={url}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={() => {
+          setShowPreview(true);
+        }}
+      />
+      <Dialog
+        fullWidth
+        maxWidth="md"
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+      >
+        <DialogTitle>Preview</DialogTitle>
+        <DialogContent sx={{ padding: 0 }}>
+          <video
+            autoPlay={false}
+            controls={true}
+            style={{ width: "100%" }}
+            src={url}
+          />
+        </DialogContent>
+      </Dialog>
+    </Fragment>
+  );
+}
+
+function RenderImage(props: { url: string; alt: string }) {
+  const { url, alt } = props;
+  const [showPreview, setShowPreview] = useState(false);
+  return (
+    <Fragment>
+      <img
+        style={{ maxHeight: "240px", cursor: "pointer" }}
+        onClick={() => setShowPreview(true)}
+        src={url}
+        alt={alt}
+      />
+      <Dialog
+        fullWidth
+        maxWidth="md"
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+      >
+        <DialogTitle>Preview</DialogTitle>
+        <DialogContent sx={{ padding: 0 }}>
+          <img
+            style={{ width: "100%" }}
+            onClick={() => setShowPreview(true)}
+            src={url}
+            alt={alt}
+          />
+        </DialogContent>
+      </Dialog>
+    </Fragment>
+  );
+}
+
 function RenderGenericAttachment(props: {
   file: ChatMessageFile;
   alt: string;
@@ -152,7 +243,7 @@ function RenderGenericAttachment(props: {
 
   if (file.category === ChatMessageFileCategory.Image) {
     if (file.url) {
-      return <img style={{ maxHeight: "240px" }} src={file.url} alt={alt} />;
+      return <RenderImage url={file.url} alt={alt} />;
     } else if (file.thumbnail?.dataURL) {
       return (
         <ThumbnailWithProgress
@@ -172,14 +263,7 @@ function RenderGenericAttachment(props: {
     }
   } else if (file.category === ChatMessageFileCategory.Video) {
     if (file.url) {
-      return (
-        <video
-          autoPlay={false}
-          controls
-          style={{ maxHeight: "240px" }}
-          src={file.url}
-        />
-      );
+      return <RenderVideo url={file.url} />;
     } else if (file.thumbnail?.dataURL) {
       return (
         <ThumbnailWithProgress
