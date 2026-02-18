@@ -7,7 +7,13 @@ import {
   FileTransferStatusEntry,
 } from "@/apis/types";
 import { InsertDriveFile } from "@mui/icons-material";
-import { Box, Card } from "@mui/material";
+import {
+  Box,
+  Card,
+  Typography,
+  CircularProgress,
+  CircularProgressProps,
+} from "@mui/material";
 import { Fragment } from "react/jsx-runtime";
 import { RenderAvatar } from "./RenderAvatar";
 
@@ -78,6 +84,64 @@ function RenderFile(props: {
   );
 }
 
+function CircularProgressWithLabel(
+  props: CircularProgressProps & { value: number },
+) {
+  return (
+    <Box sx={{ position: "relative", display: "inline-flex" }}>
+      <CircularProgress variant="determinate" {...props} />
+      <Box
+        sx={{
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          position: "absolute",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Typography
+          variant="caption"
+          component="div"
+        >{`${Math.round(props.value)}%`}</Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function ThumbnailWithProgress(props: {
+  thumbnailDataURL: string;
+  progressPercentage: number;
+  alt: string;
+}) {
+  const { thumbnailDataURL, progressPercentage, alt } = props;
+  return (
+    <Box>
+      <img
+        style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
+        src={thumbnailDataURL}
+        alt={alt}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgressWithLabel value={progressPercentage} />
+      </Box>
+    </Box>
+  );
+}
+
 function RenderGenericAttachment(props: {
   file: ChatMessageFile;
   alt: string;
@@ -85,14 +149,17 @@ function RenderGenericAttachment(props: {
 }) {
   const { file, fileTransferStatus } = props;
   const alt = props.alt || "attachment";
+
   if (file.category === ChatMessageFileCategory.Image) {
     if (file.url) {
       return <img style={{ maxHeight: "240px" }} src={file.url} alt={alt} />;
     } else if (file.thumbnail?.dataURL) {
       return (
-        <img
-          style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
-          src={file?.thumbnail?.dataURL}
+        <ThumbnailWithProgress
+          thumbnailDataURL={file.thumbnail.dataURL}
+          progressPercentage={Math.round(
+            (getFileLoadedRatio(file, fileTransferStatus) ?? 0) * 100,
+          )}
           alt={alt}
         />
       );
@@ -115,9 +182,11 @@ function RenderGenericAttachment(props: {
       );
     } else if (file.thumbnail?.dataURL) {
       return (
-        <img
-          style={{ maxHeight: "240px", filter: "blur(1.5rem)" }}
-          src={file?.thumbnail?.dataURL}
+        <ThumbnailWithProgress
+          thumbnailDataURL={file.thumbnail.dataURL}
+          progressPercentage={Math.round(
+            (getFileLoadedRatio(file, fileTransferStatus) ?? 0) * 100,
+          )}
           alt={alt}
         />
       );
