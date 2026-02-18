@@ -182,18 +182,12 @@ function RenderVideo(props: { url: string }) {
           setShowPreview(true);
         }}
       />
-      <Dialog
-        fullWidth
-        maxWidth="md"
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-      >
-        <DialogTitle>Preview</DialogTitle>
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)}>
         <DialogContent sx={{ padding: 0 }}>
           <video
             autoPlay={false}
             controls={true}
-            style={{ width: "100%" }}
+            style={{ width: "100%", maxHeight: "80vh" }}
             src={url}
           />
         </DialogContent>
@@ -213,16 +207,11 @@ function RenderImage(props: { url: string; alt: string }) {
         src={url}
         alt={alt}
       />
-      <Dialog
-        fullWidth
-        maxWidth="md"
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-      >
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)}>
         <DialogTitle>Preview</DialogTitle>
         <DialogContent sx={{ padding: 0 }}>
           <img
-            style={{ width: "100%" }}
+            style={{ width: "100%", objectFit: "contain" }}
             onClick={() => setShowPreview(true)}
             src={url}
             alt={alt}
