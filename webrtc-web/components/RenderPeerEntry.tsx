@@ -25,10 +25,10 @@ function getMessagePreviewThumbnail(msgCat: ChatMessageFileCategory): string {
   }
 }
 
-function getMessagePreview(msg: ChatMessage): string {
+function getMessagePreview(msg: ChatMessage, maxChars: number = 50): string {
   if (msg.message) {
-    return msg.message.length > 30
-      ? msg.message.slice(0, 30) + "..."
+    return msg.message.length > maxChars
+      ? msg.message.slice(0, maxChars) + "..."
       : msg.message;
   }
   if (msg.file) {
@@ -80,45 +80,21 @@ export function RenderPeerEntry(props: {
           alignItems: "center",
           gap: 1,
           width: "100%",
+          paddingTop: 0.5,
+          paddingBottom: 0.5,
         }}
       >
-        <Badge
-          badgeContent={numUnreads}
-          color="primary"
-          invisible={!hasUnreads}
-          max={99}
-        >
-          <RenderAvatar
-            username={conn.entry?.node_name || conn.node_id}
-            url={avatarUrl}
-            size="small"
-          />
-        </Badge>
+        <RenderAvatar
+          username={conn.entry?.node_name || conn.node_id}
+          url={avatarUrl}
+        />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
+          <Typography
+            noWrap
+            sx={{ fontWeight: hasUnreads ? "bold" : "normal" }}
           >
-            <Typography
-              noWrap
-              sx={{ fontWeight: hasUnreads ? "bold" : "normal" }}
-            >
-              {conn.entry?.node_name || conn.node_id}
-            </Typography>
-            {rtt !== undefined && (
-              <Typography
-                component="span"
-                variant="body2"
-                color="text.secondary"
-                noWrap
-              >
-                {rtt.toFixed(2).replace(/\.?0+$/, "")}ms
-              </Typography>
-            )}
-          </Box>
+            {conn.entry?.node_name || conn.node_id}
+          </Typography>
           {hasUnreads && latestUnreadMessage && (
             <Typography
               variant="body2"
@@ -130,6 +106,19 @@ export function RenderPeerEntry(props: {
             </Typography>
           )}
         </Box>
+        {hasUnreads && (
+          <Badge
+            badgeContent={numUnreads}
+            color="primary"
+            max={99}
+            sx={{
+              "& .MuiBadge-badge": {
+                position: "relative",
+                transform: "none",
+              },
+            }}
+          />
+        )}
       </Box>
     </MenuItem>
   );

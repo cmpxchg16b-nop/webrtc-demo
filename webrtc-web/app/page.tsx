@@ -1732,9 +1732,7 @@ export default function Home() {
               </Box>
               {/* Mock RenderPeerEntry for UI preview */}
               {mockPeerEntries.length > 0 && (
-                <Box
-                  sx={{ marginTop: 4, padding: 2, borderTop: "1px solid #ccc" }}
-                >
+                <Box sx={{ marginTop: 4, borderTop: "1px solid #ccc" }}>
                   {mockPeerEntries.map((entry) => (
                     <RenderPeerEntry
                       key={entry.conn.node_id}
