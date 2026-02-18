@@ -171,6 +171,7 @@ function RenderVideo(props: { url: string }) {
   return (
     <Fragment>
       <video
+        muted={true}
         ref={videoRef}
         autoPlay={false}
         controls={false}
