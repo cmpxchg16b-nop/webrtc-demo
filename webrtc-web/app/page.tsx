@@ -899,22 +899,32 @@ function listenForAck(
   timeoutMs: number,
   onAck: (timeout: boolean, error?: Error) => void,
 ) {
-  const timeoutId = setTimeout(() => {
-    onAck(true);
-  }, timeoutMs);
-  const evListener = (ev: any) => {
+  const timeoutRef: { timeoutId: NodeJS.Timeout | undefined } = {
+    timeoutId: undefined,
+  };
+
+  function handleEv(ev: any) {
     try {
       const evData = JSON.parse(ev.data) as any as ChatMessage;
       if (evData.ack && evData.ack.messageId === msgId) {
         onAck(false, undefined);
+        if (timeoutRef.timeoutId) {
+          clearTimeout(timeoutRef.timeoutId);
+          timeoutRef.timeoutId = undefined;
+        }
+        dc.removeEventListener("message", handleEv);
+        return;
       }
-      clearTimeout(timeoutId);
     } catch (error) {
       onAck(false, error as Error);
     }
-    dc.removeEventListener("message", evListener);
-  };
-  dc.addEventListener("message", evListener);
+  }
+
+  dc.addEventListener("message", handleEv);
+  timeoutRef.timeoutId = setTimeout(() => {
+    onAck(true, undefined);
+    dc.removeEventListener("message", handleEv);
+  }, timeoutMs);
 }
 
 // the caller has to ensure that the fileDC is opened before calling this function.
@@ -926,6 +936,7 @@ function transmitFileData(
     chunkSizeJustTransferred: number,
   ) => void,
 ) {
+  console.log("[dbg] [transmit] file", file.name);
   const fbStream = createStreamFromDataChannel(fileDC).pipeThrough(
     newUint32StreamParser(),
   );
@@ -1078,6 +1089,8 @@ function transmitFileViaPC(
         setConnTrackStatus((prev) => {
           return createFileTransferStatusEntry(prev, msgObject.toNodeId, dcId);
         });
+
+        console.log("[dbg] [acked] file", file.name);
 
         transmitFileData(fileDC, file, (_, chunk) => {
           setConnTrackStatus((prev) => {
