@@ -19,11 +19,11 @@ var cli struct {
 	WsServer          string `name:"ws-server" help:"WebSocket server URL" default:"ws://localhost:3001/ws"`
 	NodeName          string `name:"node-name" help:"Node name for registration" default:"webrtc-agent-1"`
 	PingPeriodSeconds int    `name:"ping-period-seconds" help:"Ping period in seconds" default:"5"`
+	Debug             bool   `name:"debug" help:"Show ping/pong messages in logs for debugging purposes"`
 }
 
 func main() {
-	ctx := kong.Parse(&cli)
-	_ = ctx
+	kong.Parse(&cli)
 
 	pingPeriod := time.Duration(cli.PingPeriodSeconds) * time.Second
 
