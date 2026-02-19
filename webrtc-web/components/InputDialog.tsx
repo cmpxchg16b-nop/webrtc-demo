@@ -10,8 +10,6 @@ import {
   TextField,
   Tooltip,
   IconButton,
-  DialogActions,
-  Button,
 } from "@mui/material";
 import { useState, RefObject } from "react";
 
@@ -234,54 +232,6 @@ export function AnswerDialog(props: {
           fullWidth
           value={answerText}
         />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function ChangeNameDialog(props: {
-  name: string;
-  onNameChange: (name: string) => void;
-  open: boolean;
-  onClose: () => void;
-  onConfirm: (name: string) => Promise<void>;
-}) {
-  const { name, onNameChange, open, onClose, onConfirm } = props;
-  const [waiting, setWaiting] = useState(false);
-  return (
-    <Dialog maxWidth="sm" fullWidth open={open} onClose={onClose}>
-      <DialogTitle>Change Name</DialogTitle>
-      <DialogContent>
-        <TextField
-          variant="standard"
-          label="New Name"
-          fullWidth
-          value={name}
-          onChange={(e) => {
-            onNameChange(e.target.value);
-          }}
-        />
-        <DialogActions sx={{ marginTop: 2 }}>
-          <Button
-            onClick={() => {
-              onClose();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            loading={waiting}
-            variant="contained"
-            onClick={() => {
-              setWaiting(true);
-              onConfirm(name).finally(() => {
-                setWaiting(false);
-              });
-            }}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
       </DialogContent>
     </Dialog>
   );

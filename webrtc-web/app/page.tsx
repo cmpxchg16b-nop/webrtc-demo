@@ -23,7 +23,7 @@ import {
   SDPOfferPayload,
   WSServer,
 } from "@/apis/types";
-import { ChangeNameDialog } from "@/components/InputDialog";
+import { ChangePreference, Preference } from "@/components/ChangePreference";
 import {
   Box,
   Button,
@@ -1263,7 +1263,10 @@ export default function Home() {
     ? conns.find((conn) => conn.node_id === nodeId)?.entry?.node_name
     : undefined;
 
-  const [nameEdited, setNameEdited] = useState<string>("");
+  const [preference, setPreference] = useState<Preference>({
+    name: "",
+    indexOfPreferColor: 0,
+  });
   const [activeConn, setActiveConn] = useState("");
   const [showChangeName, setShowChangeName] = useState(false);
 
@@ -1554,7 +1557,10 @@ export default function Home() {
                       }}
                       size="small"
                       onClick={() => {
-                        setNameEdited(name ?? "");
+                        setPreference((prev) => ({
+                          ...prev,
+                          name: name || prev.name,
+                        }));
                         setShowChangeName(true);
                       }}
                     >
@@ -1860,11 +1866,9 @@ export default function Home() {
           </Box>
         )}
       </Box>
-      <ChangeNameDialog
-        name={nameEdited}
-        onNameChange={(name) => {
-          setNameEdited(name);
-        }}
+      <ChangePreference
+        value={preference}
+        onChange={setPreference}
         open={showChangeName}
         onClose={() => {
           setShowChangeName(false);
