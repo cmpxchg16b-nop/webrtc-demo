@@ -19,16 +19,16 @@ type ColorToken = {
 };
 
 export const PRESET_COLORS: ColorToken[] = [
-  { light: "#FFCDD2", dark: "#F44336" }, // Red
-  { light: "#F8BBD9", dark: "#E91E63" }, // Pink
-  { light: "#E1BEE7", dark: "#9C27B0" }, // Purple
-  { light: "#D1C4E9", dark: "#673AB7" }, // Deep Purple
-  { light: "#C5CAE9", dark: "#3F51B5" }, // Indigo
-  { light: "#BBDEFB", dark: "#2196F3" }, // Blue
-  { light: "#B2EBF2", dark: "#00BCD4" }, // Cyan
-  { light: "#B2DFDB", dark: "#009688" }, // Teal
-  { light: "#C8E6C9", dark: "#4CAF50" }, // Green
-  { light: "#FFE0B2", dark: "#FF9800" }, // Orange
+  { light: "#EF9A9A", dark: "#F44336" }, // Red
+  { light: "#F48FB1", dark: "#E91E63" }, // Pink
+  { light: "#CE93D8", dark: "#9C27B0" }, // Purple
+  { light: "#B39DDB", dark: "#673AB7" }, // Deep Purple
+  { light: "#9FA8DA", dark: "#3F51B5" }, // Indigo
+  { light: "#90CAF9", dark: "#2196F3" }, // Blue
+  { light: "#80DEEA", dark: "#00BCD4" }, // Cyan
+  { light: "#80CBC4", dark: "#009688" }, // Teal
+  { light: "#A5D6A7", dark: "#4CAF50" }, // Green
+  { light: "#FFCC80", dark: "#FF9800" }, // Orange
 ];
 
 export type Preference = {
