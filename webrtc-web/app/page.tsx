@@ -1198,7 +1198,22 @@ function sortConnsByLatestUnread(
       return latestB - latestA; // Newer messages first
     }
 
-    // Neither has unread messages, maintain original order
+    // Neither has unread messages, compare the last message timestamp
+    if (messagesA.length > 0 && messagesB.length > 0) {
+      const lastMsgA = messagesA[messagesA.length - 1].timestamp;
+      const lastMsgB = messagesB[messagesB.length - 1].timestamp;
+      return lastMsgB - lastMsgA; // Newer messages first
+    }
+
+    // If only one has messages, that one comes first
+    if (messagesA.length > 0) {
+      return -1;
+    }
+    if (messagesB.length > 0) {
+      return 1;
+    }
+
+    // Neither has messages, maintain original order
     return 0;
   });
 }
