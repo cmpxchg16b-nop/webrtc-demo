@@ -1216,6 +1216,17 @@ function getPeerUnreadMsgs(
   return unreadPeerMsgs;
 }
 
+function determineFollowingMode(msgsBox: HTMLDivElement) {
+  const { scrollHeight, clientHeight, scrollTop } = msgsBox;
+  const isScrollable = scrollHeight > clientHeight;
+  const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // 50px threshold
+
+  // Following mode is on when:
+  // 1. Container is scrollable and scrolled near the bottom
+  // 2. Container is not scrollable (not enough messages)
+  return !isScrollable || isNearBottom;
+}
+
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
 
@@ -1464,6 +1475,11 @@ export default function Home() {
       }
     });
 
+    const msgsBox = msgsBoxRef.current;
+    if (msgsBox) {
+      followingModeRef.current = determineFollowingMode(msgsBox);
+    }
+
     if (msgsBoxRef.current) {
       mutObs.observe(msgsBoxRef.current, { childList: true });
       return () => mutObs.disconnect();
@@ -1475,11 +1491,17 @@ export default function Home() {
       () => updateUnreadMessageIds(getVisibleMessageIds(msgsBoxRef)),
       1000,
     );
+
     return () => clearInterval(it);
   }, []);
 
   const handleScroll = () => {
     updateUnreadMessageIds(getVisibleMessageIds(msgsBoxRef));
+
+    const msgsBox = msgsBoxRef.current;
+    if (msgsBox) {
+      followingModeRef.current = determineFollowingMode(msgsBox);
+    }
   };
 
   return (
