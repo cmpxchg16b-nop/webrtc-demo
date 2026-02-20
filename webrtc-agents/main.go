@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pkghandlers "webrtc-agents/pkg/handlers"
-	pkgsignalling "webrtc-agents/pkg/signalling"
 
 	pkgframing "example.com/webrtcserver/pkg/framing"
 
@@ -114,12 +113,9 @@ func main() {
 	signallingDataCh := runner.Run(ctx, *u, signallingTxChannel)
 
 	// Create WebRTC handler
-	webrtcHandler := pkghandlers.NewWebRTCHandler(cli.ICEServer, cli.Debug)
+	webrtcHandler := pkghandlers.NewWebRTCHandler(cli.ICEServer, cli.Debug, signallingTxChannel, signallingDataCh)
 
-	webrtcHandler.Run(ctx, &pkgsignalling.WebSocketProxy{
-		TxChan:   signallingTxChannel,
-		DataChan: signallingDataCh,
-	})
+	webrtcHandler.Run(ctx)
 
 	sigsCh := make(chan os.Signal, 1)
 	signal.Notify(sigsCh, syscall.SIGINT)

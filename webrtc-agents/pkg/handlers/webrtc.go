@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	pkgproxy "webrtc-agents/pkg/proxy"
-
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkgframing "example.com/webrtcserver/pkg/framing"
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
@@ -78,12 +76,13 @@ const (
 
 // WebRTCHandler handles WebRTC peer connections
 type WebRTCHandler struct {
-	signalling    pkgproxy.SignallingServerProxy
 	peerConnStore *PeerConnStore
 	webrtcAPI     *webrtc.API
 	iceServers    []webrtc.ICEServer
 	debug         bool
 	nodeID        string
+	signallingTx  chan<- pkgframing.MessagePayload
+	signallingRx  <-chan pkgframing.MessagePayload
 }
 
 func (h *WebRTCHandler) GetNodeID() string {
@@ -97,7 +96,7 @@ func (h *WebRTCHandler) SetNodeID(nodeID string) {
 }
 
 // NewWebRTCHandler creates a new WebRTC handler
-func NewWebRTCHandler(iceServers []string, debug bool) *WebRTCHandler {
+func NewWebRTCHandler(iceServers []string, debug bool, signallingTx chan<- pkgframing.MessagePayload, signallingRx <-chan pkgframing.MessagePayload) *WebRTCHandler {
 	// Convert string ICE servers to webrtc.ICEServer
 	var servers []webrtc.ICEServer
 	for _, server := range iceServers {
@@ -111,29 +110,30 @@ func NewWebRTCHandler(iceServers []string, debug bool) *WebRTCHandler {
 		webrtcAPI:     webrtc.NewAPI(),
 		iceServers:    servers,
 		debug:         debug,
+		signallingTx:  signallingTx,
+		signallingRx:  signallingRx,
 	}
 }
 
 // Run starts the WebRTC handler
-func (h *WebRTCHandler) Run(ctx context.Context, signalling pkgproxy.SignallingServerProxy) {
-	h.signalling = signalling
+func (h *WebRTCHandler) Run(ctx context.Context) {
 
 	for {
 		select {
 		case <-ctx.Done():
 			h.cleanup()
 			return
-		case msg, ok := <-signalling.Receive():
+		case msg, ok := <-h.signallingRx:
 			if !ok {
 				return
 			}
-			h.handleMessage(ctx, msg)
+			h.handleMessage(msg)
 		}
 	}
 }
 
 // handleMessage processes incoming signalling messages
-func (h *WebRTCHandler) handleMessage(ctx context.Context, msg pkgframing.MessagePayload) {
+func (h *WebRTCHandler) handleMessage(msg pkgframing.MessagePayload) {
 	// Handle node ID from registration response
 	if msg.NodeId != "" {
 		h.SetNodeID(msg.NodeId)
@@ -143,7 +143,7 @@ func (h *WebRTCHandler) handleMessage(ctx context.Context, msg pkgframing.Messag
 
 	// Handle SDP offer
 	if sdpOffer := msg.SDPOffer; sdpOffer != nil {
-		h.handleSDPOffer(ctx, sdpOffer)
+		h.handleSDPOffer(sdpOffer)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *WebRTCHandler) handleMessage(ctx context.Context, msg pkgframing.Messag
 }
 
 // handleSDPOffer handles SDP offer/answer messages
-func (h *WebRTCHandler) handleSDPOffer(ctx context.Context, sdpOffer *pkgconnreg.SDPOfferPayload) {
+func (h *WebRTCHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload) {
 
 	remoteNodeID := sdpOffer.FromNodeId
 	log.Printf("[webrtc] Received SDP offer from peer %s, type: %s", remoteNodeID, sdpOffer.Type)
@@ -230,10 +230,7 @@ func (h *WebRTCHandler) handleSDPOffer(ctx context.Context, sdpOffer *pkgconnreg
 			},
 		}
 
-		if err := h.signalling.Send(ctx, answerMsg); err != nil {
-			log.Printf("Failed to send SDP answer: %v", err)
-			return
-		}
+		h.signallingTx <- answerMsg
 
 		log.Printf("[webrtc] Sent SDP answer to peer %s", remoteNodeID)
 	}
@@ -363,10 +360,7 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 			},
 		}
 
-		if err := h.signalling.Send(context.Background(), iceOfferMsg); err != nil {
-			log.Printf("Failed to send ICE offer: %v", err)
-			return
-		}
+		h.signallingTx <- iceOfferMsg
 
 		if h.debug {
 			log.Printf("[webrtc] Sent ICE candidate to peer %s", remoteNodeID)
@@ -477,9 +471,7 @@ func (h *WebRTCHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID st
 		},
 	}
 
-	if err := h.signalling.Send(context.Background(), offerMsg); err != nil {
-		return fmt.Errorf("failed to send ICE restart offer: %w", err)
-	}
+	h.signallingTx <- offerMsg
 
 	log.Printf("[webrtc] Sent ICE restart offer to peer %s", remoteNodeID)
 	return nil
