@@ -72,6 +72,10 @@ func main() {
 					log.Printf("Pong received - RTT: %v, CorrelationID: %s, SeqID: %d",
 						rtt, payload.Echo.CorrelationID, payload.Echo.SeqID)
 				}
+			} else if iceOffer := payload.ICEOffer; iceOffer != nil {
+				// todo
+			} else if sdpOffer := payload.SDPOffer; sdpOffer != nil {
+				// todo
 			}
 		}
 	}()
