@@ -42,6 +42,7 @@ import {
   RefObject,
   SetStateAction,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -60,6 +61,7 @@ import { Edit } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
 import { createThumbnailFromFile } from "@/apis/thumbnail";
 import { useUnreads } from "@/apis/unreads";
+import { useScrollTop } from "@/apis/scrollTop";
 
 const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
@@ -1524,6 +1526,13 @@ export default function Home() {
     }
   }, [activeConn]);
 
+  const { saveScrollTop, restoreScrollTop } = useScrollTop();
+  useLayoutEffect(() => {
+    if (activeConn) {
+      restoreScrollTop(activeConn, msgsBoxRef);
+    }
+  }, [activeConn]);
+
   useEffect(() => {
     const it = setInterval(
       () => updateUnreadMessageIds(getVisibleMessageIds(msgsBoxRef)),
@@ -1639,6 +1648,7 @@ export default function Home() {
                       key={conn.node_id}
                       activeNodeId={activeConn}
                       onSelect={() => {
+                        saveScrollTop(activeConn, msgsBoxRef);
                         const server = servers.find(
                           (server) => server.id === selectedServer,
                         );
