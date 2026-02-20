@@ -12,6 +12,7 @@ import (
 	pkgframing "example.com/webrtcserver/pkg/framing"
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
 
+	"github.com/google/uuid"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -407,18 +408,10 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 			entry.DataChannel = dc
 			entry.mu.Unlock()
 			h.setupChatDataChannel(dc, remoteNodeID)
-		case PredefinedDCLabelFile:
-			dcID := dc.ID()
-			if dcID != nil {
-				entry.mu.Lock()
-				entry.FileDataChannels[fmt.Sprintf("%d", *dcID)] = dc
-				entry.mu.Unlock()
-			}
-			h.setupFileDataChannel(dc, remoteNodeID)
 		case PredefinedDCLabelPing:
 			h.setupPingDataChannel(dc, remoteNodeID)
 		default:
-			log.Printf("[webrtc] Unknown data channel label: %s", dc.Label())
+			log.Printf("[webrtc] Unknown (or unsupported) data channel label: %s", dc.Label())
 		}
 	})
 
@@ -621,8 +614,28 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 			return
 		}
 
-		// Swap sender and receiver
+		// Send ACK for the received message first
+		ackMsg := ChatMessage{
+			MessageID:  uuid.New().String(),
+			FromNodeID: chatMsg.ToNodeID,
+			ToNodeID:   chatMsg.FromNodeID,
+			Timestamp:  time.Now().UnixMilli(),
+			ACK: &ChatMessageACK{
+				MessageID: chatMsg.MessageID,
+			},
+		}
+		ackData, err := json.Marshal(ackMsg)
+		if err != nil {
+			log.Printf("[webrtc] Failed to marshal ACK message: %v", err)
+		} else if err := dc.Send(ackData); err != nil {
+			log.Printf("[webrtc] Failed to send ACK: %v", err)
+		}
+
+		// Swap sender and receiver for echo
 		chatMsg.FromNodeID, chatMsg.ToNodeID = chatMsg.ToNodeID, chatMsg.FromNodeID
+		chatMsg.ACK = nil
+		chatMsg.ACKed = nil
+		chatMsg.MessageID = uuid.New().String()
 
 		// Marshal the modified message
 		responseData, err := json.Marshal(chatMsg)
@@ -639,27 +652,6 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 
 	dc.OnError(func(err error) {
 		log.Printf("[webrtc] Chat data channel error with peer %s: %v", remoteNodeID, err)
-	})
-}
-
-// setupFileDataChannel sets up event handlers for file data channel
-func (h *WebRTCHandler) setupFileDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
-	dc.OnOpen(func() {
-		log.Printf("[webrtc] File data channel opened with peer %s", remoteNodeID)
-	})
-
-	dc.OnClose(func() {
-		log.Printf("[webrtc] File data channel closed with peer %s", remoteNodeID)
-	})
-
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		if h.debug {
-			log.Printf("[webrtc] Received file data from peer %s, size: %d bytes", remoteNodeID, len(msg.Data))
-		}
-	})
-
-	dc.OnError(func(err error) {
-		log.Printf("[webrtc] File data channel error with peer %s: %v", remoteNodeID, err)
 	})
 }
 
