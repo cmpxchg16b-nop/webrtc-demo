@@ -19,8 +19,8 @@ import (
 
 var cli struct {
 	WsServer              string        `name:"ws-server" help:"WebSocket server URL" default:"ws://localhost:3001/ws"`
-	NodeName              string        `name:"node-name" help:"Node name for registration" default:"webrtc-agent-1"`
-	PingPeriodSeconds     int           `name:"ping-period-seconds" help:"Ping period in seconds" default:"5"`
+	NodeName              string        `name:"node-name" help:"Node name for registration" default:"EchoBot"`
+	PingPeriod            time.Duration `name:"ping-period-seconds" help:"Ping period in seconds" default:"3s"`
 	Debug                 bool          `name:"debug" help:"Show ping/pong messages in logs for debugging purposes"`
 	ICEServer             []string      `name:"ice-server" help:"To specify the ICE servers, might be specify multiple times" default:"stun:stun.l.google.com:19302"`
 	ReconnectOnDisconnect bool          `name:"reconnect-on-disconnect" help:"Reconnect on WebSocket disconnect"`
@@ -28,13 +28,15 @@ var cli struct {
 }
 
 type WebSocketRunner struct {
+	URL                   url.URL
 	ReconnectDelay        time.Duration
 	ReconnectOnDisconnect bool
 	PingIntv              time.Duration
 	Debug                 bool
 }
 
-func (runner *WebSocketRunner) Run(ctx context.Context, u url.URL, txChannel <-chan pkgframing.MessagePayload) chan pkgframing.MessagePayload {
+func (runner *WebSocketRunner) Run(ctx context.Context, txChannel <-chan pkgframing.MessagePayload) chan pkgframing.MessagePayload {
+	u := runner.URL
 	outputDataCh := make(chan pkgframing.MessagePayload)
 	go func(ctx context.Context) {
 		defer close(outputDataCh)
@@ -88,11 +90,6 @@ func (runner *WebSocketRunner) Run(ctx context.Context, u url.URL, txChannel <-c
 func main() {
 	kong.Parse(&cli)
 
-	pingPeriod := time.Duration(cli.PingPeriodSeconds) * time.Second
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
 	// Parse WebSocket URL
 	u, err := url.Parse(cli.WsServer)
 	if err != nil {
@@ -104,15 +101,21 @@ func main() {
 	defer cancel()
 
 	runner := &WebSocketRunner{
-		PingIntv:              pingPeriod,
+		URL:                   *u,
+		PingIntv:              cli.PingPeriod,
 		Debug:                 cli.Debug,
 		ReconnectOnDisconnect: cli.ReconnectOnDisconnect,
 		ReconnectDelay:        cli.ReconnectDelay,
 	}
-	signallingTxChannel := make(chan pkgframing.MessagePayload)
-	signallingDataCh := runner.Run(ctx, *u, signallingTxChannel)
 
-	// Create WebRTC handler
+	// wsconn might be re-dial anytime, so the webrtc handler can't just send message directly to wsconn,
+	// it send messages to this tx channel, which in turn forward messages to wsconn
+	signallingTxChannel := make(chan pkgframing.MessagePayload)
+
+	// webrtc handler get signalling channel messages from this channel, instead of reading wsconn directly,
+	// the reason is the same as above.
+	signallingDataCh := runner.Run(ctx, signallingTxChannel)
+
 	webrtcHandler := pkghandlers.NewWebRTCHandler(cli.ICEServer, cli.Debug, signallingTxChannel, signallingDataCh)
 
 	webrtcHandler.Run(ctx)
