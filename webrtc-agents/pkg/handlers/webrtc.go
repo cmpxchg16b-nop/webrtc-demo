@@ -148,7 +148,7 @@ func (h *WebRTCHandler) handleMessage(ctx context.Context, msg pkgframing.Messag
 
 	// Handle ICE offer
 	if iceOffer := msg.ICEOffer; iceOffer != nil {
-		h.handleICEOffer(ctx, iceOffer)
+		h.handleICEOffer(iceOffer)
 		return
 	}
 }
@@ -259,7 +259,7 @@ func (h *WebRTCHandler) handleSDPOffer(ctx context.Context, sdpOffer *pkgconnreg
 }
 
 // handleICEOffer handles ICE candidate messages
-func (h *WebRTCHandler) handleICEOffer(ctx context.Context, iceOffer *pkgconnreg.ICEOfferPayload) {
+func (h *WebRTCHandler) handleICEOffer(iceOffer *pkgconnreg.ICEOfferPayload) {
 	myNodeID := h.signalling.GetNodeID()
 	if iceOffer.ToNodeId != myNodeID {
 		return
