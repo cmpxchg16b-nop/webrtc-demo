@@ -35,17 +35,40 @@ func (pinger *WebSocketPinger) StartPingLoop(ctx context.Context, wsConn *websoc
 	period := pinger.Intv
 	debug := pinger.Debug
 
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-
 	seqID := uint64(0)
 
 	errCh := make(chan error, 1)
 	dataCh := make(chan pkgframing.MessagePayload, 1)
 
 	go func(ctx context.Context) {
-		defer close(dataCh)
 		defer close(errCh)
+
+		readErrCh := make(chan error, 1)
+		go func() {
+			defer close(readErrCh)
+			defer close(dataCh)
+
+			for {
+				var msg pkgframing.MessagePayload
+				if err := wsConn.ReadJSON(&msg); err != nil {
+					log.Println("Failed to get message from ws connection:", err)
+					errCh <- err
+					return
+				}
+				if msg.Echo != nil {
+					if msg.Echo.Direction == pkgconnreg.EchoDirectionS2C && pinger.Debug {
+						rtt := time.Since(time.UnixMilli(int64(msg.Echo.Timestamp)))
+						log.Printf("Pong received - RTT: %v, CorrelationID: %s, SeqID: %d",
+							rtt, msg.Echo.CorrelationID, msg.Echo.SeqID)
+					}
+					continue
+				}
+				dataCh <- msg
+			}
+		}()
+
+		ticker := time.NewTicker(period)
+		defer ticker.Stop()
 
 		for {
 			select {
@@ -79,22 +102,12 @@ func (pinger *WebSocketPinger) StartPingLoop(ctx context.Context, wsConn *websoc
 				if debug {
 					log.Printf("Sent ping - SeqID: %d, CorrelationID: ping-%d", seqID, seqID)
 				}
-			default:
-				var msg pkgframing.MessagePayload
-				if err := wsConn.ReadJSON(&msg); err != nil {
-					log.Println("Failed to get message from ws connection:", err)
+			case err, ok := <-readErrCh:
+				if ok && err != nil {
+					log.Println("Failed to read message:", err)
 					errCh <- err
-					return
 				}
-				if msg.Echo != nil {
-					if msg.Echo.Direction == pkgconnreg.EchoDirectionS2C && pinger.Debug {
-						rtt := time.Since(time.UnixMilli(int64(msg.Echo.Timestamp)))
-						log.Printf("Pong received - RTT: %v, CorrelationID: %s, SeqID: %d",
-							rtt, msg.Echo.CorrelationID, msg.Echo.SeqID)
-					}
-					continue
-				}
-				dataCh <- msg
+				return
 			}
 		}
 	}(ctx)

@@ -49,6 +49,7 @@ func (runner *WebSocketRunner) Run(ctx context.Context, txChannel <-chan pkgfram
 				log.Fatal("Failed to dial:", err)
 			}
 			defer wsConn.Close()
+			log.Printf("Dialed to ws server %+v", wsConn.RemoteAddr().String())
 
 			registerer := &pkghandlers.WebSocketRegisterer{}
 			if err := registerer.Register(wsConn, cli.NodeName); err != nil {

@@ -589,8 +589,6 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 	})
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		log.Printf("[webrtc] Received chat message from peer %s: %s", remoteNodeID, string(msg.Data))
-
 		// Parse the message as ChatMessage
 		var chatMsg ChatMessage
 		if err := json.Unmarshal(msg.Data, &chatMsg); err != nil {
@@ -605,6 +603,7 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 		// - ping: ping/pong messages
 		// - file: file transfer metadata
 		if chatMsg.ACK != nil || chatMsg.Delete != nil || chatMsg.Amend != nil || chatMsg.Ping != nil || chatMsg.File != nil {
+			log.Printf("[webrtc] Ignored un-echoable message from peer %s: %+v", remoteNodeID, string(msg.Data))
 			return
 		}
 
@@ -627,7 +626,7 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 		ackData, err := json.Marshal(ackMsg)
 		if err != nil {
 			log.Printf("[webrtc] Failed to marshal ACK message: %v", err)
-		} else if err := dc.Send(ackData); err != nil {
+		} else if err := dc.SendText(string(ackData)); err != nil {
 			log.Printf("[webrtc] Failed to send ACK: %v", err)
 		}
 
@@ -645,7 +644,7 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 		}
 
 		// Send the modified message back
-		if err := dc.Send(responseData); err != nil {
+		if err := dc.SendText(string(responseData)); err != nil {
 			log.Printf("[webrtc] Failed to send chat response: %v", err)
 		}
 	})
