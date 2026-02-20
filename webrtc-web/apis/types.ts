@@ -1,8 +1,9 @@
 export enum WellKnownAttributes {
   PreferredColor = "preferred_color",
+  SupportAttachment = "support_attachment",
 }
 
-export type ConnectionAttributes = Record<WellKnownAttributes, string>;
+export type ConnectionAttributes = Partial<Record<WellKnownAttributes, string>>;
 
 export type Preference = {
   name: string;

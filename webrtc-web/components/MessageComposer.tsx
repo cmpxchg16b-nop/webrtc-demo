@@ -35,8 +35,9 @@ export function MessageComposer(props: {
   onText?: (text: string) => void;
   onFile?: (file: FileList) => void;
   onPhoto?: (photo: FileList) => void;
+  supportAttachment?: boolean;
 }) {
-  const { onFile, onPhoto } = props;
+  const { onFile, onPhoto, supportAttachment } = props;
   const [messageInput, setMessageInput] = useState<string>("");
 
   const doSend = () => {
@@ -74,6 +75,9 @@ export function MessageComposer(props: {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!supportAttachment) {
+      return;
+    }
     setAnchorEl(event.currentTarget);
   };
   const handleClose = () => {
@@ -96,8 +100,12 @@ export function MessageComposer(props: {
           paddingRight: 1,
         }}
       >
-        <Tooltip title={"Attachment"}>
-          <IconButton onClick={handleClick}>
+        <Tooltip
+          title={
+            !!supportAttachment ? "Attachment" : "Attachment is not supported"
+          }
+        >
+          <IconButton disabled={!supportAttachment} onClick={handleClick}>
             <AttachFileIcon sx={{ transform: "rotate(30deg)" }} />
           </IconButton>
         </Tooltip>

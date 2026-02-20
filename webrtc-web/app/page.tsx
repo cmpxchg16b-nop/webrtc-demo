@@ -127,6 +127,7 @@ function useWs(setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>) {
           attributes: {
             [WellKnownAttributes.PreferredColor]:
               preference.indexOfPreferColor.toString(),
+            [WellKnownAttributes.SupportAttachment]: "true",
           },
         },
       };
@@ -1803,6 +1804,11 @@ export default function Home() {
             </Box>
             <Box sx={{ flexShrink: 0 }}>
               <MessageComposer
+                supportAttachment={
+                  conns.find((conn) => conn.node_id === activeConn)?.entry
+                    ?.attributes?.[WellKnownAttributes.SupportAttachment] ===
+                  "true"
+                }
                 onFile={(filelist) => {
                   const fileCat = ChatMessageFileCategory.File;
                   const pc = connTrackRef.current[activeConn]?.peerConnection;
