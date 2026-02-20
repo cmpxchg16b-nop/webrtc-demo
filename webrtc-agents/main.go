@@ -19,10 +19,11 @@ import (
 )
 
 var cli struct {
-	WsServer          string `name:"ws-server" help:"WebSocket server URL" default:"ws://localhost:3001/ws"`
-	NodeName          string `name:"node-name" help:"Node name for registration" default:"webrtc-agent-1"`
-	PingPeriodSeconds int    `name:"ping-period-seconds" help:"Ping period in seconds" default:"5"`
-	Debug             bool   `name:"debug" help:"Show ping/pong messages in logs for debugging purposes"`
+	WsServer          string   `name:"ws-server" help:"WebSocket server URL" default:"ws://localhost:3001/ws"`
+	NodeName          string   `name:"node-name" help:"Node name for registration" default:"webrtc-agent-1"`
+	PingPeriodSeconds int      `name:"ping-period-seconds" help:"Ping period in seconds" default:"5"`
+	Debug             bool     `name:"debug" help:"Show ping/pong messages in logs for debugging purposes"`
+	ICEServer         []string `name:"ice-server" help:"To specify the ICE servers, might be specify multiple times" default:"stun:stun.l.google.com:19302"`
 }
 
 // PeerConnEntry tracks a peer connection and its associated data
@@ -75,10 +76,6 @@ func (s *PeerConnStore) Walk(walkFunc func(remoteNodeID string, entry *PeerConnE
 	})
 }
 
-const (
-	googleStunServer = "stun:stun.l.google.com:19302"
-)
-
 // Predefined data channel labels
 const (
 	PredefinedDCLabelChat = "chat"
@@ -122,12 +119,14 @@ func main() {
 
 	// Helper function to create new peer connection
 	createPeerConnection := func(remoteNodeID string) (*PeerConnEntry, error) {
+		// Build ICE servers from CLI parameter
+
+		iceServer := webrtc.ICEServer{
+			URLs: cli.ICEServer,
+		}
+
 		config := webrtc.Configuration{
-			ICEServers: []webrtc.ICEServer{
-				{
-					URLs: []string{googleStunServer},
-				},
-			},
+			ICEServers: []webrtc.ICEServer{iceServer},
 		}
 
 		pc, err := webrtcAPI.NewPeerConnection(config)

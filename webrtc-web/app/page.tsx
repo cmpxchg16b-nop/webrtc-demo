@@ -25,10 +25,7 @@ import {
   Preference,
   WSServer,
 } from "@/apis/types";
-import {
-  ChangePreference,
-  getPreferredColor,
-} from "@/components/ChangePreference";
+import { ChangePreference } from "@/components/ChangePreference";
 import {
   Box,
   Button,
@@ -901,11 +898,8 @@ function tryParseInt(s: string): number {
   return -1;
 }
 
-function getUserPreferenceMap(
-  conns: ConnEntry[],
-  selfNodeId: string,
-): Record<string, Preference> {
-  let userPreferenceMap: Record<string, Preference> = {};
+function getUserPreferenceMap(conns: ConnEntry[]): Record<string, Preference> {
+  const userPreferenceMap: Record<string, Preference> = {};
   for (const conn of conns ?? []) {
     if (conn.entry?.node_name) {
       userPreferenceMap[conn.node_id] = {
@@ -940,9 +934,9 @@ function listenForAck(
     timeoutId: undefined,
   };
 
-  function handleEv(ev: any) {
+  function handleEv(ev: MessageEvent) {
     try {
-      const evData = JSON.parse(ev.data) as any as ChatMessage;
+      const evData = JSON.parse(ev.data) as ChatMessage;
       if (evData.ack && evData.ack.messageId === msgId) {
         onAck(false, undefined);
         if (timeoutRef.timeoutId) {
@@ -980,7 +974,7 @@ function transmitFileData(
 
   const fbReader = fbStream.getReader();
 
-  let fbRef: { receivedTotalBytes: number } = {
+  const fbRef: { receivedTotalBytes: number } = {
     receivedTotalBytes: 0,
   };
 
@@ -988,7 +982,7 @@ function transmitFileData(
     value,
     done,
   }: {
-    value: any;
+    value: unknown;
     done: boolean;
   }) => {
     if (done) {
@@ -1010,7 +1004,7 @@ function transmitFileData(
     .then(doReadFeedBackStream)
     .catch((e) => console.error("failed to read feed back stream", e));
 
-  let sentSizeRef: { value: number } = {
+  const sentSizeRef: { value: number } = {
     value: 0,
   };
 
@@ -1489,7 +1483,7 @@ export default function Home() {
     }
   };
 
-  const userPreferenceMap = getUserPreferenceMap(conns ?? [], nodeId ?? "");
+  const userPreferenceMap = getUserPreferenceMap(conns ?? []);
   const [selectedServer, setSelectedServer] = useState<string>(servers[0].id);
   const [searchKw, setSearchKw] = useState<string>("");
 
@@ -1689,7 +1683,9 @@ export default function Home() {
                   onChange={(e) => setSelectedServer(e.target.value)}
                 >
                   {servers.map((server) => (
-                    <MenuItem value={server.id}>{server.name}</MenuItem>
+                    <MenuItem key={server.id} value={server.id}>
+                      {server.name}
+                    </MenuItem>
                   ))}
                 </Select>
                 <Box sx={{ justifySelf: "right" }}>Pick a Name:</Box>
