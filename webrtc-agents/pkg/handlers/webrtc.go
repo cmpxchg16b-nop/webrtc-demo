@@ -605,8 +605,19 @@ func (h *WebRTCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeI
 			return
 		}
 
-		// Skip echo for ack messages to prevent infinite loop
-		if chatMsg.ACK != nil {
+		// Skip control messages that shouldn't be echoed
+		// - ack: acknowledgment messages
+		// - delete: delete request messages
+		// - amend: amend request messages
+		// - ping: ping/pong messages
+		// - file: file transfer metadata
+		if chatMsg.ACK != nil || chatMsg.Delete != nil || chatMsg.Amend != nil || chatMsg.Ping != nil || chatMsg.File != nil {
+			return
+		}
+
+		// Only echo messages that have actual text content
+		if chatMsg.Message == nil && chatMsg.RichText == nil {
+			log.Printf("[webrtc] Skipping non-text message from peer %s", remoteNodeID)
 			return
 		}
 
