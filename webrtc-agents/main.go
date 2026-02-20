@@ -28,12 +28,14 @@ var cli struct {
 
 // PeerConnEntry tracks a peer connection and its associated data
 type PeerConnEntry struct {
-	PeerConnection   *webrtc.PeerConnection
-	DataChannel      *webrtc.DataChannel
-	FileDataChannels map[string]*webrtc.DataChannel
-	RemoteOffers     []webrtc.SessionDescription
-	QueuedICEOffers  []webrtc.ICECandidateInit
-	mu               sync.RWMutex
+	PeerConnection        *webrtc.PeerConnection
+	DataChannel           *webrtc.DataChannel
+	FileDataChannels      map[string]*webrtc.DataChannel
+	RemoteOffers          []webrtc.SessionDescription
+	QueuedICEOffers       []webrtc.ICECandidateInit
+	ICERestartAttempts    int
+	MaxICERestartAttempts int
+	mu                    sync.RWMutex
 }
 
 // PeerConnStore is a thread-safe store for peer connections
@@ -135,10 +137,12 @@ func main() {
 		}
 
 		entry := &PeerConnEntry{
-			PeerConnection:   pc,
-			FileDataChannels: make(map[string]*webrtc.DataChannel),
-			RemoteOffers:     make([]webrtc.SessionDescription, 0),
-			QueuedICEOffers:  make([]webrtc.ICECandidateInit, 0),
+			PeerConnection:        pc,
+			FileDataChannels:      make(map[string]*webrtc.DataChannel),
+			RemoteOffers:          make([]webrtc.SessionDescription, 0),
+			QueuedICEOffers:       make([]webrtc.ICECandidateInit, 0),
+			ICERestartAttempts:    0,
+			MaxICERestartAttempts: 3,
 		}
 
 		// Set up data channel handler for incoming data channels
@@ -214,11 +218,62 @@ func main() {
 			log.Printf("[webrtc] Peer connection state changed: %s for peer %s", state, remoteNodeID)
 
 			switch state {
-			case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
-				peerConnStore.Delete(remoteNodeID)
-				if err := pc.Close(); err != nil {
-					log.Printf("Failed to close peer connection: %v", err)
+			case webrtc.PeerConnectionStateDisconnected:
+				// Wait briefly then attempt ICE restart
+				go func() {
+					time.Sleep(3 * time.Second)
+					entry.mu.RLock()
+					currentState := entry.PeerConnection.ConnectionState()
+					attempts := entry.ICERestartAttempts
+					maxAttempts := entry.MaxICERestartAttempts
+					entry.mu.RUnlock()
+
+					if currentState == webrtc.PeerConnectionStateDisconnected && attempts < maxAttempts {
+						log.Printf("[webrtc] Attempting ICE restart for peer %s (attempt %d/%d)", remoteNodeID, attempts+1, maxAttempts)
+						if err := initiateICERestart(entry, remoteNodeID, wsConn, &nodeIDMu, nodeID); err != nil {
+							log.Printf("[webrtc] ICE restart failed for peer %s: %v", remoteNodeID, err)
+						}
+					} else if attempts >= maxAttempts {
+						log.Printf("[webrtc] Max ICE restart attempts reached for peer %s, closing connection", remoteNodeID)
+						peerConnStore.Delete(remoteNodeID)
+						if err := entry.PeerConnection.Close(); err != nil {
+							log.Printf("Failed to close peer connection: %v", err)
+						}
+					}
+				}()
+
+			case webrtc.PeerConnectionStateFailed:
+				// Attempt immediate ICE restart
+				entry.mu.RLock()
+				attempts := entry.ICERestartAttempts
+				maxAttempts := entry.MaxICERestartAttempts
+				entry.mu.RUnlock()
+
+				if attempts < maxAttempts {
+					log.Printf("[webrtc] Connection failed, attempting ICE restart for peer %s (attempt %d/%d)", remoteNodeID, attempts+1, maxAttempts)
+					if err := initiateICERestart(entry, remoteNodeID, wsConn, &nodeIDMu, nodeID); err != nil {
+						log.Printf("[webrtc] ICE restart failed for peer %s: %v", remoteNodeID, err)
+						peerConnStore.Delete(remoteNodeID)
+						if err := entry.PeerConnection.Close(); err != nil {
+							log.Printf("Failed to close peer connection: %v", err)
+						}
+					}
+				} else {
+					log.Printf("[webrtc] Max ICE restart attempts reached for peer %s, closing connection", remoteNodeID)
+					peerConnStore.Delete(remoteNodeID)
+					if err := entry.PeerConnection.Close(); err != nil {
+						log.Printf("Failed to close peer connection: %v", err)
+					}
 				}
+
+			case webrtc.PeerConnectionStateConnected:
+				// Reset restart attempts on successful connection
+				entry.mu.Lock()
+				entry.ICERestartAttempts = 0
+				entry.mu.Unlock()
+
+			case webrtc.PeerConnectionStateClosed:
+				peerConnStore.Delete(remoteNodeID)
 			}
 		})
 
@@ -307,6 +362,17 @@ func main() {
 
 				// If this is an offer, create an answer
 				if sdpOffer.Type == pkgconnreg.OfferTypeOffer {
+					// Check if this is an ICE restart offer by looking for ice-options: restart in SDP
+					isICERestart := containsICERestartOption(offer.SDP)
+
+					if isICERestart {
+						log.Printf("[webrtc] Received ICE restart offer from peer %s", remoteNodeID)
+						// Clear queued ICE candidates from previous session
+						entry.mu.Lock()
+						entry.QueuedICEOffers = nil
+						entry.mu.Unlock()
+					}
+
 					log.Printf("[webrtc] Creating answer for peer %s", remoteNodeID)
 
 					answer, err := entry.PeerConnection.CreateAnswer(nil)
@@ -561,4 +627,74 @@ func setupPingDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
 	dc.OnError(func(err error) {
 		log.Printf("[webrtc] Ping data channel error with peer %s: %v", remoteNodeID, err)
 	})
+}
+
+// initiateICERestart initiates an ICE restart for a peer connection
+func initiateICERestart(entry *PeerConnEntry, remoteNodeID string, wsConn *websocket.Conn, nodeIDMu *sync.RWMutex, nodeID string) error {
+	entry.mu.Lock()
+	entry.ICERestartAttempts++
+	attempts := entry.ICERestartAttempts
+	entry.mu.Unlock()
+
+	log.Printf("[webrtc] Initiating ICE restart for peer %s (attempt %d)", remoteNodeID, attempts)
+
+	// Create offer with ICE restart
+	offer, err := entry.PeerConnection.CreateOffer(&webrtc.OfferOptions{
+		ICERestart: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create ICE restart offer: %w", err)
+	}
+
+	// Set local description
+	if err := entry.PeerConnection.SetLocalDescription(offer); err != nil {
+		return fmt.Errorf("failed to set local description: %w", err)
+	}
+
+	// Send the offer via WebSocket
+	offerJSON, err := json.Marshal(offer)
+	if err != nil {
+		return fmt.Errorf("failed to marshal offer: %w", err)
+	}
+
+	nodeIDMu.RLock()
+	myNodeID := nodeID
+	nodeIDMu.RUnlock()
+
+	offerMsg := pkgframing.MessagePayload{
+		SDPOffer: &pkgconnreg.SDPOfferPayload{
+			Type:       pkgconnreg.OfferTypeOffer,
+			OfferJSON:  string(offerJSON),
+			FromNodeId: myNodeID,
+			ToNodeId:   remoteNodeID,
+		},
+	}
+
+	data, err := json.Marshal(offerMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal offer message: %w", err)
+	}
+
+	if err := wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
+		return fmt.Errorf("failed to send ICE restart offer: %w", err)
+	}
+
+	log.Printf("[webrtc] Sent ICE restart offer to peer %s", remoteNodeID)
+	return nil
+}
+
+// containsICERestartOption checks if SDP contains ICE restart option
+func containsICERestartOption(sdp string) bool {
+	// Look for "a=ice-options:restart" in the SDP
+	return len(sdp) > 0 && (contains(sdp, "a=ice-options:restart") || contains(sdp, "ice-options:restart"))
+}
+
+// contains checks if s contains substr (case-sensitive)
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
