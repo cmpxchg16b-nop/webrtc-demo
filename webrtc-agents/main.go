@@ -37,30 +37,28 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	echoBotRunner := &pkgwsrunner.WebSocketRunner{
+	var echoBotHandler pkghandlers.GenericWebRTCHandler
+	echoBotHandler = pkghandlers.NewEchoHandler(cli.ICEServer, cli.Debug)
+	go echoBotHandler.Run(ctx, &pkgwsrunner.WebSocketRunner{
 		URL:                   *u,
 		PingIntv:              cli.PingPeriod,
 		Debug:                 cli.Debug,
 		ReconnectOnDisconnect: cli.ReconnectOnDisconnect,
 		ReconnectDelay:        cli.ReconnectDelay,
 		NodeName:              "EchoBot",
-	}
-	var echoBotHandler pkghandlers.GenericWebRTCHandler
-	echoBotHandler = pkghandlers.NewEchoHandler(cli.ICEServer, cli.Debug)
-	echoBotHandler.Run(ctx, echoBotRunner)
+	})
 	log.Println("Echo bot started!")
 
-	musicBotRunner := &pkgwsrunner.WebSocketRunner{
+	var musicBotHandler pkghandlers.GenericWebRTCHandler
+	musicBotHandler = pkghandlers.NewTrackHandler(cli.ICEServer, cli.Debug)
+	go musicBotHandler.Run(ctx, &pkgwsrunner.WebSocketRunner{
 		URL:                   *u,
 		PingIntv:              cli.PingPeriod,
 		Debug:                 cli.Debug,
 		ReconnectOnDisconnect: cli.ReconnectOnDisconnect,
 		ReconnectDelay:        cli.ReconnectDelay,
 		NodeName:              "MusicBot",
-	}
-	var musicBotHandler pkghandlers.GenericWebRTCHandler
-	musicBotHandler = pkghandlers.NewTrackHandler(cli.ICEServer, cli.Debug)
-	musicBotHandler.Run(ctx, musicBotRunner)
+	})
 	log.Println("Music bot started!")
 
 	sigsCh := make(chan os.Signal, 1)
