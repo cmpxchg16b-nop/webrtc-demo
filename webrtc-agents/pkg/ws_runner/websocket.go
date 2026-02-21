@@ -15,6 +15,7 @@ import (
 )
 
 type WebSocketRunner struct {
+	// URL is the URL of signalling WebSocket server
 	URL                   url.URL
 	ReconnectDelay        time.Duration
 	ReconnectOnDisconnect bool

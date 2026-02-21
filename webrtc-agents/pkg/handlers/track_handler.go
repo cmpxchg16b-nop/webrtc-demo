@@ -16,8 +16,8 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// EchoHandler handles WebRTC peer connections
-type EchoHandler struct {
+// TrackHandler handles WebRTC peer connections
+type TrackHandler struct {
 	peerConnStore *PeerConnStore
 	webrtcAPI     *webrtc.API
 	iceServers    []webrtc.ICEServer
@@ -26,18 +26,18 @@ type EchoHandler struct {
 	signallingRx  <-chan pkgframing.MessagePayload
 }
 
-func (h *EchoHandler) GetNodeID() string {
+func (h *TrackHandler) GetNodeID() string {
 	// todo: protect it with lock/proper synchronization
 	return h.nodeID
 }
 
-func (h *EchoHandler) SetNodeID(nodeID string) {
+func (h *TrackHandler) SetNodeID(nodeID string) {
 	// todo: protect it with lock/proper synchronization
 	h.nodeID = nodeID
 }
 
-// NewEchoHandler creates a new WebRTC handler
-func NewEchoHandler(iceServers []string, debug bool) *EchoHandler {
+// NewTrackHandler creates a new WebRTC handler
+func NewTrackHandler(iceServers []string, debug bool) *TrackHandler {
 	// Convert string ICE servers to webrtc.ICEServer
 	var servers []webrtc.ICEServer
 	for _, server := range iceServers {
@@ -46,7 +46,7 @@ func NewEchoHandler(iceServers []string, debug bool) *EchoHandler {
 		})
 	}
 
-	return &EchoHandler{
+	return &TrackHandler{
 		peerConnStore: NewPeerConnStore(),
 		webrtcAPI:     webrtc.NewAPI(),
 		iceServers:    servers,
@@ -55,7 +55,7 @@ func NewEchoHandler(iceServers []string, debug bool) *EchoHandler {
 }
 
 // Serve starts the WebRTC handler
-func (h *EchoHandler) Serve(ctx context.Context, signallingTx chan<- pkgframing.MessagePayload, signallingRx <-chan pkgframing.MessagePayload) {
+func (h *TrackHandler) Serve(ctx context.Context, signallingTx chan<- pkgframing.MessagePayload, signallingRx <-chan pkgframing.MessagePayload) {
 	h.signallingRx = signallingRx
 
 	for {
@@ -72,13 +72,13 @@ func (h *EchoHandler) Serve(ctx context.Context, signallingTx chan<- pkgframing.
 	}
 }
 
-func (h *EchoHandler) Run(ctx context.Context, runner pkgwsrunner.WebSocketSignallingSessionRunner) {
+func (h *TrackHandler) Run(ctx context.Context, runner pkgwsrunner.WebSocketSignallingSessionRunner) {
 	tx, rx := runner.Run(ctx)
 	h.Serve(ctx, tx, rx)
 }
 
 // handleMessage processes incoming signalling messages
-func (h *EchoHandler) handleMessage(msg pkgframing.MessagePayload, signallingTx chan<- pkgframing.MessagePayload) {
+func (h *TrackHandler) handleMessage(msg pkgframing.MessagePayload, signallingTx chan<- pkgframing.MessagePayload) {
 	// Handle node ID from registration response
 	if msg.NodeId != "" {
 		h.SetNodeID(msg.NodeId)
@@ -100,7 +100,7 @@ func (h *EchoHandler) handleMessage(msg pkgframing.MessagePayload, signallingTx 
 }
 
 // handleSDPOffer handles SDP offer/answer messages
-func (h *EchoHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload, signallingTx chan<- pkgframing.MessagePayload) {
+func (h *TrackHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload, signallingTx chan<- pkgframing.MessagePayload) {
 
 	remoteNodeID := sdpOffer.FromNodeId
 	log.Printf("[webrtc] Received SDP offer from peer %s, type: %s", remoteNodeID, sdpOffer.Type)
@@ -198,7 +198,7 @@ func (h *EchoHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload, signa
 }
 
 // handleICEOffer handles ICE candidate messages
-func (h *EchoHandler) handleICEOffer(iceOffer *pkgconnreg.ICEOfferPayload) {
+func (h *TrackHandler) handleICEOffer(iceOffer *pkgconnreg.ICEOfferPayload) {
 
 	remoteNodeID := iceOffer.FromNodeId
 	if h.debug {
@@ -241,7 +241,7 @@ func (h *EchoHandler) handleICEOffer(iceOffer *pkgconnreg.ICEOfferPayload) {
 }
 
 // createPeerConnection creates a new peer connection for the given remote node
-func (h *EchoHandler) createPeerConnection(remoteNodeID string, signallingTx chan<- pkgframing.MessagePayload) (*PeerConnEntry, error) {
+func (h *TrackHandler) createPeerConnection(remoteNodeID string, signallingTx chan<- pkgframing.MessagePayload) (*PeerConnEntry, error) {
 	config := webrtc.Configuration{
 		ICEServers: h.iceServers,
 	}
@@ -372,7 +372,7 @@ func (h *EchoHandler) createPeerConnection(remoteNodeID string, signallingTx cha
 }
 
 // initiateICERestart initiates an ICE restart for a peer connection
-func (h *EchoHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID string, tx chan<- pkgframing.MessagePayload) error {
+func (h *TrackHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID string, tx chan<- pkgframing.MessagePayload) error {
 	entry.mu.Lock()
 	entry.ICERestartAttempts++
 	attempts := entry.ICERestartAttempts
@@ -415,7 +415,7 @@ func (h *EchoHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID stri
 }
 
 // cleanup closes all peer connections
-func (h *EchoHandler) cleanup() {
+func (h *TrackHandler) cleanup() {
 	h.peerConnStore.Walk(func(remoteNodeID string, entry *PeerConnEntry) (bool, error) {
 		if err := entry.PeerConnection.Close(); err != nil {
 			log.Printf("Failed to close peer connection to %s: %v", remoteNodeID, err)
@@ -425,7 +425,7 @@ func (h *EchoHandler) cleanup() {
 }
 
 // setupChatDataChannel sets up event handlers for chat data channel
-func (h *EchoHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
+func (h *TrackHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
 	dc.OnOpen(func() {
 		log.Printf("[webrtc] Chat data channel opened with peer %s", remoteNodeID)
 	})
@@ -501,7 +501,7 @@ func (h *EchoHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID 
 }
 
 // setupPingDataChannel sets up event handlers for ping data channel
-func (h *EchoHandler) setupPingDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
+func (h *TrackHandler) setupPingDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
 	dc.OnOpen(func() {
 		log.Printf("[webrtc] Ping data channel opened with peer %s", remoteNodeID)
 	})
