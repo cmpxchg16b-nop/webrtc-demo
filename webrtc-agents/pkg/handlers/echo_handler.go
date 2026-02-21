@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	pkgwsrunner "webrtc-agents/pkg/ws_runner"
+
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkgframing "example.com/webrtcserver/pkg/framing"
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
@@ -164,7 +166,6 @@ type WebRTCHandler struct {
 	iceServers    []webrtc.ICEServer
 	debug         bool
 	nodeID        string
-	signallingTx  chan<- pkgframing.MessagePayload
 	signallingRx  <-chan pkgframing.MessagePayload
 }
 
@@ -179,7 +180,7 @@ func (h *WebRTCHandler) SetNodeID(nodeID string) {
 }
 
 // NewWebRTCHandler creates a new WebRTC handler
-func NewWebRTCHandler(iceServers []string, debug bool, signallingTx chan<- pkgframing.MessagePayload, signallingRx <-chan pkgframing.MessagePayload) *WebRTCHandler {
+func NewWebRTCHandler(iceServers []string, debug bool) *WebRTCHandler {
 	// Convert string ICE servers to webrtc.ICEServer
 	var servers []webrtc.ICEServer
 	for _, server := range iceServers {
@@ -193,13 +194,12 @@ func NewWebRTCHandler(iceServers []string, debug bool, signallingTx chan<- pkgfr
 		webrtcAPI:     webrtc.NewAPI(),
 		iceServers:    servers,
 		debug:         debug,
-		signallingTx:  signallingTx,
-		signallingRx:  signallingRx,
 	}
 }
 
-// Run starts the WebRTC handler
-func (h *WebRTCHandler) Run(ctx context.Context) {
+// Serve starts the WebRTC handler
+func (h *WebRTCHandler) Serve(ctx context.Context, signallingTx chan<- pkgframing.MessagePayload, signallingRx <-chan pkgframing.MessagePayload) {
+	h.signallingRx = signallingRx
 
 	for {
 		select {
@@ -210,13 +210,18 @@ func (h *WebRTCHandler) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			h.handleMessage(msg)
+			h.handleMessage(msg, signallingTx)
 		}
 	}
 }
 
+func (h *WebRTCHandler) Run(ctx context.Context, runner pkgwsrunner.WebSocketSignallingSessionRunner) {
+	tx, rx := runner.Run(ctx)
+	h.Serve(ctx, tx, rx)
+}
+
 // handleMessage processes incoming signalling messages
-func (h *WebRTCHandler) handleMessage(msg pkgframing.MessagePayload) {
+func (h *WebRTCHandler) handleMessage(msg pkgframing.MessagePayload, signallingTx chan<- pkgframing.MessagePayload) {
 	// Handle node ID from registration response
 	if msg.NodeId != "" {
 		h.SetNodeID(msg.NodeId)
@@ -226,7 +231,7 @@ func (h *WebRTCHandler) handleMessage(msg pkgframing.MessagePayload) {
 
 	// Handle SDP offer
 	if sdpOffer := msg.SDPOffer; sdpOffer != nil {
-		h.handleSDPOffer(sdpOffer)
+		h.handleSDPOffer(sdpOffer, signallingTx)
 		return
 	}
 
@@ -238,7 +243,7 @@ func (h *WebRTCHandler) handleMessage(msg pkgframing.MessagePayload) {
 }
 
 // handleSDPOffer handles SDP offer/answer messages
-func (h *WebRTCHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload) {
+func (h *WebRTCHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload, signallingTx chan<- pkgframing.MessagePayload) {
 
 	remoteNodeID := sdpOffer.FromNodeId
 	log.Printf("[webrtc] Received SDP offer from peer %s, type: %s", remoteNodeID, sdpOffer.Type)
@@ -247,7 +252,7 @@ func (h *WebRTCHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload) {
 	entry, found := h.peerConnStore.Get(remoteNodeID)
 	if !found {
 		var createErr error
-		entry, createErr = h.createPeerConnection(remoteNodeID)
+		entry, createErr = h.createPeerConnection(remoteNodeID, signallingTx)
 		if createErr != nil {
 			log.Printf("Failed to create peer connection: %v", createErr)
 			return
@@ -313,7 +318,7 @@ func (h *WebRTCHandler) handleSDPOffer(sdpOffer *pkgconnreg.SDPOfferPayload) {
 			},
 		}
 
-		h.signallingTx <- answerMsg
+		signallingTx <- answerMsg
 
 		log.Printf("[webrtc] Sent SDP answer to peer %s", remoteNodeID)
 	}
@@ -379,7 +384,7 @@ func (h *WebRTCHandler) handleICEOffer(iceOffer *pkgconnreg.ICEOfferPayload) {
 }
 
 // createPeerConnection creates a new peer connection for the given remote node
-func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntry, error) {
+func (h *WebRTCHandler) createPeerConnection(remoteNodeID string, signallingTx chan<- pkgframing.MessagePayload) (*PeerConnEntry, error) {
 	config := webrtc.Configuration{
 		ICEServers: h.iceServers,
 	}
@@ -435,7 +440,7 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 			},
 		}
 
-		h.signallingTx <- iceOfferMsg
+		signallingTx <- iceOfferMsg
 
 		if h.debug {
 			log.Printf("[webrtc] Sent ICE candidate to peer %s", remoteNodeID)
@@ -459,7 +464,7 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 
 				if currentState == webrtc.PeerConnectionStateDisconnected && attempts < maxAttempts {
 					log.Printf("[webrtc] Attempting ICE restart for peer %s (attempt %d/%d)", remoteNodeID, attempts+1, maxAttempts)
-					if err := h.initiateICERestart(entry, remoteNodeID); err != nil {
+					if err := h.initiateICERestart(entry, remoteNodeID, signallingTx); err != nil {
 						log.Printf("[webrtc] ICE restart failed for peer %s: %v", remoteNodeID, err)
 					}
 				} else if attempts >= maxAttempts {
@@ -480,7 +485,7 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 
 			if attempts < maxAttempts {
 				log.Printf("[webrtc] Connection failed, attempting ICE restart for peer %s (attempt %d/%d)", remoteNodeID, attempts+1, maxAttempts)
-				if err := h.initiateICERestart(entry, remoteNodeID); err != nil {
+				if err := h.initiateICERestart(entry, remoteNodeID, signallingTx); err != nil {
 					log.Printf("[webrtc] ICE restart failed for peer %s: %v", remoteNodeID, err)
 					h.peerConnStore.Delete(remoteNodeID)
 					if err := entry.PeerConnection.Close(); err != nil {
@@ -510,7 +515,7 @@ func (h *WebRTCHandler) createPeerConnection(remoteNodeID string) (*PeerConnEntr
 }
 
 // initiateICERestart initiates an ICE restart for a peer connection
-func (h *WebRTCHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID string) error {
+func (h *WebRTCHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID string, tx chan<- pkgframing.MessagePayload) error {
 	entry.mu.Lock()
 	entry.ICERestartAttempts++
 	attempts := entry.ICERestartAttempts
@@ -546,7 +551,7 @@ func (h *WebRTCHandler) initiateICERestart(entry *PeerConnEntry, remoteNodeID st
 		},
 	}
 
-	h.signallingTx <- offerMsg
+	tx <- offerMsg
 
 	log.Printf("[webrtc] Sent ICE restart offer to peer %s", remoteNodeID)
 	return nil

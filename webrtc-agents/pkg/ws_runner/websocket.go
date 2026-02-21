@@ -1,16 +1,81 @@
-package handlers
+package ws_runner
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 
 	"time"
 
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkgframing "example.com/webrtcserver/pkg/framing"
+
 	"github.com/gorilla/websocket"
 )
+
+type WebSocketRunner struct {
+	URL                   url.URL
+	ReconnectDelay        time.Duration
+	ReconnectOnDisconnect bool
+	PingIntv              time.Duration
+	Debug                 bool
+	NodeName              string
+}
+
+func (runner *WebSocketRunner) Run(ctx context.Context) (chan<- pkgframing.MessagePayload, <-chan pkgframing.MessagePayload) {
+	u := runner.URL
+	txChannel := make(chan pkgframing.MessagePayload)
+	outputDataCh := make(chan pkgframing.MessagePayload)
+	go func(ctx context.Context) {
+		defer close(outputDataCh)
+		for {
+			log.Printf("Connecting to %s", u.String())
+
+			// Establish WebSocket connection
+			wsConn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+			if err != nil {
+				log.Fatal("Failed to dial:", err)
+			}
+			defer wsConn.Close()
+			log.Printf("Dialed to ws server %+v", wsConn.RemoteAddr().String())
+
+			registerer := &WebSocketRegisterer{}
+			if err := registerer.Register(wsConn, runner.NodeName); err != nil {
+				log.Fatal("Failed to send registration message:", err)
+			}
+
+			log.Printf("Sent registration message for node: %s", runner.NodeName)
+
+			wsPinger := &WebSocketPinger{
+				Intv:  runner.PingIntv,
+				Debug: runner.Debug,
+			}
+			dataCh, errCh := wsPinger.StartPingLoop(ctx, wsConn, txChannel)
+			log.Println("Ping/pong loop started")
+
+			go func() {
+				for item := range dataCh {
+					outputDataCh <- item
+				}
+			}()
+
+			err, ok := <-errCh
+			if ok && err != nil {
+				log.Printf("Error on ws connection: %+v", err)
+				if !runner.ReconnectOnDisconnect {
+					return
+				}
+				break
+			}
+
+			log.Printf("Reconnecting to %s in %s", u.String(), runner.ReconnectDelay.String())
+			<-time.After(runner.ReconnectDelay)
+		}
+	}(ctx)
+
+	return txChannel, outputDataCh
+}
 
 type WebSocketRegisterer struct{}
 
