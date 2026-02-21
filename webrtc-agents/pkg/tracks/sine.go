@@ -2,7 +2,9 @@ package tracks
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,17 +13,55 @@ import (
 	webrtc "github.com/pion/webrtc/v4"
 )
 
-// MySineTrack implements a TrackLocal interface
-type MySineTrack struct {
-	streamId  string
-	sampleIdx int
-	samples   []int16
+// MyWHTrack implements a TrackLocal interface
+type MyWHTrack struct {
+	trackId               string
+	streamId              string
+	stopChan              chan struct{}
+	sampleRate            int
+	numChannels           int
+	mtu                   int
+	opusEncoder           *opus.Encoder
+	maxPayloadSize        int
+	frameIntv             time.Duration
+	samplesPerPacket      int
+	numPrePopulatePackets int
 }
 
-func NewMySineTrack() *MySineTrack {
-	return &MySineTrack{
-		streamId: uuid.New().String(),
+func NewMyWHTrack(streamId string) (*MyWHTrack, error) {
+
+	wh := &MyWHTrack{
+		trackId:               fmt.Sprintf("audio-%s", uuid.New().String()),
+		streamId:              streamId,
+		stopChan:              make(chan struct{}),
+		sampleRate:            48000,
+		numChannels:           2,
+		mtu:                   1280, // 1280 is the minimum requirement for IPv6 over ethernet
+		frameIntv:             20 * time.Millisecond,
+		numPrePopulatePackets: 10,
 	}
+
+	// The Opus encoder can output encoded frames representing 2.5, 5, 10,
+	// 20, 40, or 60 ms of speech or audio data.
+	// we would use 20ms here, which would be (20ms/1000ms)*(48000samples/s)=960 samples per packet
+
+	wh.samplesPerPacket = int(float64(wh.frameIntv.Milliseconds()) / float64(1000) * float64(wh.sampleRate))
+
+	maxPayloadSize := wh.mtu -
+		40 - // IPv6 header
+		8 - // UDP header
+		16 - // SRTP Auth Tag, would be 10 bytes (for HMAC-SHA1), or 16 bytes (for AES-GCM)
+		12 - // minimum RTP header of fixed size
+		20 // possible RTP extensions
+	wh.maxPayloadSize = maxPayloadSize
+
+	enc, err := opus.NewEncoder(wh.sampleRate, wh.numChannels, opus.AppVoIP)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create opus encoder: %w", err)
+	}
+	wh.opusEncoder = enc
+
+	return wh, nil
 }
 
 func getOpusCodecParams(ctx webrtc.TrackLocalContext) *webrtc.RTPCodecParameters {
@@ -33,54 +73,112 @@ func getOpusCodecParams(ctx webrtc.TrackLocalContext) *webrtc.RTPCodecParameters
 	return nil
 }
 
-func (t *MySineTrack) startStreaming(ctx webrtc.TrackLocalContext, selectedCodec webrtc.RTPCodecParameters) {
-	// 1. Initialize the Encoder (48kHz, 2 Channels for Stereo)
-	// For Mono, use 1 channel and adjust your sample logic.
-	enc, err := opus.NewEncoder(48000, 2, opus.AppVoIP)
-	if err != nil {
-		return
+// returns: (sizeofPayload, encodedPayload, error)
+func (track *MyWHTrack) getPacket(pcmBuf []int16, encodeBuf []byte) (int, error) {
+
+	for i := range pcmBuf {
+		pcmBuf[i] = int16(rand.Uint32())
 	}
 
-	ticker := time.NewTicker(20 * time.Millisecond)
-	samplesPerPacket := 960
-	var sequenceNumber uint16
-	var timestamp uint32
+	n, err := track.opusEncoder.Encode(pcmBuf, encodeBuf)
+	if err != nil {
+		return 0, err
+	}
+
+	return n, err
+}
+
+// returns: (nextSequence, nextTimestamp, error)
+func (track *MyWHTrack) sendPacket(ctx webrtc.TrackLocalContext, payload []byte, payloadType uint8, sequenceNumber uint16, timestamp uint32) (uint16, uint32, error) {
+	rtpHeader := rtp.Header{
+		Version:        2,
+		PayloadType:    payloadType,
+		SequenceNumber: sequenceNumber,
+		Timestamp:      timestamp,
+		SSRC:           uint32(ctx.SSRC()),
+	}
+
+	_, err := ctx.WriteStream().WriteRTP(&rtpHeader, payload)
+	if err == nil {
+		sequenceNumber++
+		timestamp += uint32(track.samplesPerPacket)
+		return sequenceNumber, timestamp, nil
+	}
+
+	return sequenceNumber, timestamp, err
+}
+
+func (track *MyWHTrack) startStreaming(ctx webrtc.TrackLocalContext, selectedCodec webrtc.RTPCodecParameters) {
+	// refer to [rfc7587](https://datatracker.ietf.org/doc/html/rfc7587)
+	// for the browser support of codecs, refer to https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/WebRTC_codecs
+
+	// sequenceNumber increases by every single packet sent, it's also the sequence number in RTP packet header
+	// by RFC 3550, they should be started at random
+	var sequenceNumber uint16 = uint16(rand.Uint32())
+
+	// timestamp is the timestamp in RTP packet header,
+	// "reflects the sampling instant of the first octet in the RTP data packet."
+	// As an example, for fixed-rate audio
+	// the timestamp clock would likely increment by one for each
+	// sampling period.  If an audio application reads blocks covering
+	// 160 sampling periods from the input device, the timestamp would be
+	// increased by 160 for each such block, regardless of whether the
+	//  block is transmitted in a packet or dropped as silent.
+	// // by RFC 3550, they should be started at random
+	var timestamp uint32 = rand.Uint32()
+
+	pcmBuf := make([]int16, track.numChannels*track.samplesPerPacket)
+
+	encodeBuf := make([]byte, track.maxPayloadSize)
+
+	// --- PHASE 1: PRE-FLOOD  ---
+	// We send 10 packets immediately to fill the receiver's buffer
+	for i := 0; i < track.numPrePopulatePackets; i++ {
+		n, err := track.getPacket(pcmBuf, encodeBuf)
+		if err != nil {
+			log.Println("Failed to get RTP packet payload")
+			return
+		}
+
+		sequenceNumber, timestamp, err = track.sendPacket(
+			ctx,
+			encodeBuf[:n],
+			uint8(selectedCodec.PayloadType),
+			sequenceNumber,
+			timestamp,
+		)
+		if err != nil {
+			log.Println("Failed to send RTP packet")
+			return
+		}
+	}
+
+	ticker := time.NewTicker(track.frameIntv)
 
 	for {
 		select {
 		case <-ticker.C:
-			// 2. Grab the 960 samples (Stereo = 1920 int16s)
-			end := t.sampleIdx + (samplesPerPacket * 2)
-			if end > len(t.samples) {
-				t.sampleIdx = 0
-				end = samplesPerPacket * 2
-			}
-			pcmChunk := t.samples[t.sampleIdx:end]
 
-			// 3. Encode PCM to Opus
-			data := make([]byte, 1000) // Buffer for compressed data
-			n, err := enc.Encode(pcmChunk, data)
+			n, err := track.getPacket(pcmBuf, encodeBuf)
 			if err != nil {
-				continue
+				log.Println("Failed to get RTP packet payload")
+				return
 			}
 
-			rtpHeader := rtp.Header{
-				Version:        2,
-				PayloadType:    uint8(selectedCodec.PayloadType),
-				SequenceNumber: sequenceNumber,
-				Timestamp:      timestamp,
-				SSRC:           uint32(ctx.SSRC()),
-				Marker:         false,
+			sequenceNumber, timestamp, err = track.sendPacket(
+				ctx,
+				encodeBuf[:n],
+				uint8(selectedCodec.PayloadType),
+				sequenceNumber,
+				timestamp,
+			)
+			if err != nil {
+				log.Println("Failed to send RTP packet")
+				return
 			}
 
-			// 5. Send and Increment
-			if _, err := ctx.WriteStream().WriteRTP(&rtpHeader, data[:n]); err == nil {
-				sequenceNumber++
-				timestamp += uint32(samplesPerPacket)
-				t.sampleIdx += (samplesPerPacket * 2)
-			}
-
-		case <-ctx.Done():
+		case <-track.stopChan:
+			ticker.Stop()
 			return
 		}
 	}
@@ -89,43 +187,48 @@ func (t *MySineTrack) startStreaming(ctx webrtc.TrackLocalContext, selectedCodec
 // Bind should implement the way how the media data flows from the Track to the PeerConnection
 // This will be called internally after signaling is complete and the list of available
 // codecs has been determined
-func (track *MySineTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
+func (track *MyWHTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
 	codecParam := getOpusCodecParams(ctx)
 	if codecParam == nil {
 		return webrtc.RTPCodecParameters{}, errors.New("no supported codec found, currently only opus is supported")
 	}
 
-	track.startStreaming(ctx)
+	go track.startStreaming(ctx, *codecParam)
 
 	return *codecParam, nil
 }
 
 // Unbind should implement the teardown logic when the track is no longer needed. This happens
 // because a track has been stopped.
-func (track *MySineTrack) Unbind(ctx webrtc.TrackLocalContext) error {
-	// todo: teardown and clean up
+func (track *MyWHTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 	log.Printf("[track] stream %s is tearing down", track.streamId)
+	close(track.stopChan)
 	return nil
 }
 
 // ID is the unique identifier for this Track. This should be unique for the
 // stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
 // and StreamID would be 'desktop' or 'webcam'
-func (track *MySineTrack) ID() string {
-	return "audio"
+// Interpretate this as Track ID
+func (track *MyWHTrack) ID() string {
+	return track.trackId
 }
 
 // RID is the RTP Stream ID for this track.
-func (track *MySineTrack) RID() string {
-	return "my_sine_track_rid"
+// This is the RTP simulcast ID, to distinguish streams with
+// different qualities or resolutions.
+// We are not doing simulcast, so leave it empty here.
+func (track *MyWHTrack) RID() string {
+	return ""
 }
 
 // StreamID is the group this track belongs too. This must be unique
-func (track *MySineTrack) StreamID() string {
+// Better interpretate this as a Group ID, streams are grouped into groups
+func (track *MyWHTrack) StreamID() string {
 	return track.streamId
 }
 
 // Kind controls if this TrackLocal is audio or video
-func (track *MySineTrack) Kind() webrtc.RTPCodecType {
+func (track *MyWHTrack) Kind() webrtc.RTPCodecType {
 	return webrtc.RTPCodecTypeAudio
 }
