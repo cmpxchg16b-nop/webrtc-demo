@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/pion/rtp"
@@ -25,6 +27,7 @@ type OggFileGenerator struct {
 
 // NewOggFileGenerator creates a new OGG file-based generator.
 // The OGG file must contain Opus-encoded audio.
+// If name is empty, the filename (without extension) will be used.
 func NewOggFileGenerator(name, filePath string) (*OggFileGenerator, error) {
 	gen := &OggFileGenerator{
 		name:     name,
@@ -33,6 +36,11 @@ func NewOggFileGenerator(name, filePath string) (*OggFileGenerator, error) {
 
 	if err := gen.resetReader(); err != nil {
 		return nil, err
+	}
+
+	// Set name from filename if not provided
+	if gen.name == "" {
+		gen.name = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
 	return gen, nil

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pkgtracks "webrtc-agents/pkg/tracks"
+	pkgoggfile "webrtc-agents/pkg/tracks/oggfile"
 	pkgsine "webrtc-agents/pkg/tracks/sine"
 	pkgwn "webrtc-agents/pkg/tracks/wn"
 	pkgwsrunner "webrtc-agents/pkg/ws_runner"
@@ -29,6 +30,7 @@ type TrackHandler struct {
 	nodeID        string
 	signallingRx  <-chan pkgframing.MessagePayload
 	generators    []pkgtracks.RTPPacketGenerator
+	oggFiles      []string // OGG files to load as tracks
 }
 
 func (h *TrackHandler) GetNodeID() string {
@@ -42,7 +44,8 @@ func (h *TrackHandler) SetNodeID(nodeID string) {
 }
 
 // NewTrackHandler creates a new WebRTC handler
-func NewTrackHandler(iceServers []string, debug bool) *TrackHandler {
+// oggFiles is a list of OGG file paths to load as audio tracks
+func NewTrackHandler(iceServers []string, debug bool, oggFiles []string) *TrackHandler {
 	// Convert string ICE servers to webrtc.ICEServer
 	var servers []webrtc.ICEServer
 	for _, server := range iceServers {
@@ -57,6 +60,7 @@ func NewTrackHandler(iceServers []string, debug bool) *TrackHandler {
 		iceServers:    servers,
 		debug:         debug,
 		generators:    []pkgtracks.RTPPacketGenerator{},
+		oggFiles:      oggFiles,
 	}
 
 	// Create opus encoder for the generators
@@ -118,7 +122,43 @@ func NewTrackHandler(iceServers []string, debug bool) *TrackHandler {
 	}
 	handler.generators = append(handler.generators, whiteNoiseGen)
 
+	// Load OGG files
+	handler.loadOggFiles()
+
 	return handler
+}
+
+// loadOggFiles loads all configured OGG files as generators
+func (h *TrackHandler) loadOggFiles() {
+	for _, filePath := range h.oggFiles {
+		if err := h.loadOggFile(filePath); err != nil {
+			log.Printf("[webrtc] %v", err)
+		}
+	}
+}
+
+// loadOggFile loads a single OGG file as a generator
+// Validates that the file has the correct sample rate (48000) and channel count (2)
+func (h *TrackHandler) loadOggFile(filePath string) error {
+	// Create generator - name is automatically set from filename
+	gen, err := pkgoggfile.NewOggFileGenerator("", filePath)
+	if err != nil {
+		return fmt.Errorf("failed to load OGG file %s: %w", filePath, err)
+	}
+
+	// Validate sample rate and channels
+	sampleRate := gen.GetSampleRate()
+	channels := gen.GetChannels()
+	if sampleRate != pkgtracks.DefaultSampleRate {
+		return fmt.Errorf("OGG file %s has sample rate %d, expected %d", filePath, sampleRate, pkgtracks.DefaultSampleRate)
+	}
+	if channels != pkgtracks.DefaultChannelsCount {
+		return fmt.Errorf("OGG file %s has %d channels, expected %d", filePath, channels, pkgtracks.DefaultChannelsCount)
+	}
+
+	h.generators = append(h.generators, gen)
+	log.Printf("[webrtc] Loaded OGG track: %s (sampleRate=%d, channels=%d)", gen.GetName(), sampleRate, channels)
+	return nil
 }
 
 // Serve starts the WebRTC handler

@@ -22,6 +22,7 @@ var cli struct {
 	ICEServer             []string      `name:"ice-server" help:"To specify the ICE servers, might be specify multiple times" default:"stun:stun.l.google.com:19302"`
 	ReconnectOnDisconnect bool          `name:"reconnect-on-disconnect" help:"Reconnect on WebSocket disconnect"`
 	ReconnectDelay        time.Duration `name:"reconnect-delay" help:"Delay between reconnect attempts" default:"3s"`
+	OggFiles              []string      `name:"ogg-file" help:"OGG files to load as audio tracks (must be 48kHz stereo)" placeholder:"FILE.ogg"`
 }
 
 func main() {
@@ -50,7 +51,7 @@ func main() {
 	log.Println("Echo bot started!")
 
 	var musicBotHandler pkghandlers.GenericWebRTCHandler
-	musicBotHandler = pkghandlers.NewTrackHandler(cli.ICEServer, cli.Debug)
+	musicBotHandler = pkghandlers.NewTrackHandler(cli.ICEServer, cli.Debug, cli.OggFiles)
 	go musicBotHandler.Run(ctx, &pkgwsrunner.WebSocketRunner{
 		URL:                   *u,
 		PingIntv:              cli.PingPeriod,
