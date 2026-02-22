@@ -85,7 +85,7 @@ type ConnTrack = Record<string, ConnTrackEntry>;
 
 function useWs(
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
-  audioCtxRef: RefObject<AudioContext>,
+  audioCtxRef: RefObject<AudioContext | null>,
 ) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -766,9 +766,13 @@ function attachPeerConnectionEventListeners(
   nodeIdRef: RefObject<string>,
   wsRef: RefObject<WebSocket | null>,
   logId: string | undefined,
-  audioCtxRef: RefObject<AudioContext>,
+  audioCtxRef: RefObject<AudioContext | null>,
   connTrackRef: RefObject<ConnTrack>,
 ) {
+  if (!audioCtxRef.current) {
+    audioCtxRef.current = new AudioContext();
+    console.log("[dbg] [track] audio context created:", audioCtxRef.current);
+  }
   const logSource = logId ? ` [${logId}]` : "";
   // registering event handlers for peerconnection handle
   peerConnection.oniceconnectionstatechange = (event) => {
@@ -859,6 +863,7 @@ function attachPeerConnectionEventListeners(
             const offerMsg: MessagePayload = {
               sdp_offer: offerPayload,
             };
+            peerConnection.setLocalDescription(offer);
             wsRef.current?.send(JSON.stringify(offerMsg));
           })
           .catch((e) => {
@@ -1326,7 +1331,7 @@ function determineFollowingMode(msgsBox: HTMLDivElement) {
 
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
-  const audioCtxRef = useRef<AudioContext>(new AudioContext());
+  const audioCtxRef = useRef<AudioContext | null>();
 
   const {
     rtt,
@@ -1985,6 +1990,34 @@ export default function Home() {
                       const toNodeId = activeConn;
                       if (filelist && filelist.length > 0 && pc && chatDC) {
                         for (const file of filelist) {
+                          if (file.name === "testsong-2.ogg") {
+                            const url = URL.createObjectURL(file);
+                            const audio = new Audio(url);
+                            audio.muted = true;
+                            if ((audio as any).captureStream) {
+                              const stream = (
+                                audio as any
+                              ).captureStream() as MediaStream;
+                              if (stream) {
+                                stream.onaddtrack = (trackEv) => {
+                                  const track = trackEv.track;
+                                  if (track && track.kind === "audio") {
+                                    const resp = pc.addTrack(track);
+                                    console.log("[dbg] [track] added:", resp);
+                                  }
+                                };
+                                stream.onremovetrack = (trackEv) => {
+                                  console.log(
+                                    "[dbg] [track] removeTrack:",
+                                    trackEv,
+                                  );
+                                };
+                                audio.play();
+                              }
+                            }
+
+                            continue;
+                          }
                           transmitFileViaPC(
                             pc,
                             chatDC,
