@@ -509,18 +509,69 @@ func (h *TrackHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID
 			return
 		}
 
-		// Check for "/start" command to create a track
-		if chatMsg.Message != nil && *chatMsg.Message == "/start" {
-			log.Printf("[webrtc] Received /start command from peer %s", remoteNodeID)
-			entry, found := h.peerConnStore.Get(remoteNodeID)
-			if !found {
-				log.Printf("[webrtc] No peer connection found for peer %s", remoteNodeID)
+		// Handle commands
+		if chatMsg.Message != nil {
+			msg := *chatMsg.Message
+
+			// Handle /list command - list all available tracks
+			if msg == "/list" {
+				log.Printf("[webrtc] Received /list command from peer %s", remoteNodeID)
+				h.sendChatResponse(dc, &chatMsg, h.formatTrackList())
 				return
 			}
-			if err := h.createAndAddTrack(entry, remoteNodeID, signallingTx); err != nil {
-				log.Printf("[webrtc] Failed to create track for peer %s: %v", remoteNodeID, err)
+
+			// Handle /play command - play a specific track
+			if len(msg) > 6 && msg[:6] == "/play " {
+				trackName := msg[6:]
+				log.Printf("[webrtc] Received /play command from peer %s for track: %s", remoteNodeID, trackName)
+
+				// Check if track exists
+				found := false
+				for _, gen := range h.generators {
+					if gen.GetName() == trackName {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					errMsg := fmt.Sprintf("Error: Track '%s' not found. Use /list to see available tracks.", trackName)
+					h.sendChatResponse(dc, &chatMsg, errMsg)
+					return
+				}
+
+				entry, found := h.peerConnStore.Get(remoteNodeID)
+				if !found {
+					log.Printf("[webrtc] No peer connection found for peer %s", remoteNodeID)
+					return
+				}
+				if err := h.createAndAddTrack(entry, remoteNodeID, signallingTx, trackName); err != nil {
+					log.Printf("[webrtc] Failed to create track for peer %s: %v", remoteNodeID, err)
+					h.sendChatResponse(dc, &chatMsg, fmt.Sprintf("Error: Failed to play track: %v", err))
+				} else {
+					h.sendChatResponse(dc, &chatMsg, fmt.Sprintf("Now playing: %s", trackName))
+				}
+				return
 			}
-			return
+
+			// Handle /start command (deprecated - use /play instead)
+			if msg == "/start" {
+				log.Printf("[webrtc] Received /start command from peer %s (deprecated, use /play)", remoteNodeID)
+				entry, found := h.peerConnStore.Get(remoteNodeID)
+				if !found {
+					log.Printf("[webrtc] No peer connection found for peer %s", remoteNodeID)
+					return
+				}
+				// Default to first generator if available
+				if len(h.generators) == 0 {
+					h.sendChatResponse(dc, &chatMsg, "Error: No tracks available.")
+					return
+				}
+				if err := h.createAndAddTrack(entry, remoteNodeID, signallingTx, h.generators[0].GetName()); err != nil {
+					log.Printf("[webrtc] Failed to create track for peer %s: %v", remoteNodeID, err)
+				}
+				return
+			}
 		}
 
 		// Skip control messages that shouldn't be echoed
@@ -581,6 +632,38 @@ func (h *TrackHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID
 	})
 }
 
+// formatTrackList returns a formatted string listing all available tracks
+func (h *TrackHandler) formatTrackList() string {
+	if len(h.generators) == 0 {
+		return "No tracks available."
+	}
+	result := "Available tracks:\n"
+	for _, gen := range h.generators {
+		result += fmt.Sprintf("  - %s\n", gen.GetName())
+	}
+	result += "\nUse /play <track_name> to play a track."
+	return result
+}
+
+// sendChatResponse sends a chat message response back to the peer
+func (h *TrackHandler) sendChatResponse(dc *webrtc.DataChannel, originalMsg *ChatMessage, responseText string) {
+	responseMsg := ChatMessage{
+		MessageID:  uuid.New().String(),
+		FromNodeID: originalMsg.ToNodeID,
+		ToNodeID:   originalMsg.FromNodeID,
+		Timestamp:  time.Now().UnixMilli(),
+		Message:    &responseText,
+	}
+	responseData, err := json.Marshal(responseMsg)
+	if err != nil {
+		log.Printf("[webrtc] Failed to marshal response message: %v", err)
+		return
+	}
+	if err := dc.SendText(string(responseData)); err != nil {
+		log.Printf("[webrtc] Failed to send response: %v", err)
+	}
+}
+
 // setupPingDataChannel sets up event handlers for ping data channel
 func (h *TrackHandler) setupPingDataChannel(dc *webrtc.DataChannel, remoteNodeID string) {
 	dc.OnOpen(func() {
@@ -607,31 +690,25 @@ func (h *TrackHandler) setupPingDataChannel(dc *webrtc.DataChannel, remoteNodeID
 }
 
 // createAndAddTrack creates a new audio track and adds it to the peer connection
-func (h *TrackHandler) createAndAddTrack(entry *PeerConnEntry, remoteNodeID string, signallingTx chan<- pkgframing.MessagePayload) error {
+func (h *TrackHandler) createAndAddTrack(entry *PeerConnEntry, remoteNodeID string, signallingTx chan<- pkgframing.MessagePayload, generatorName string) error {
+	// Find the generator by name
+	var selectedGenerator pkgtracks.RTPPacketGenerator
+	for _, gen := range h.generators {
+		if gen.GetName() == generatorName {
+			selectedGenerator = gen
+			break
+		}
+	}
+	if selectedGenerator == nil {
+		return fmt.Errorf("generator not found: %s", generatorName)
+	}
 
 	frameIntv := pkgtracks.DefaultFrameIntv
 	sampleRate := pkgtracks.DefaultSampleRate
 	channels := pkgtracks.DefaultChannelsCount
-	samplesPerPacket := int(float64(frameIntv) / float64(1000) * float64(sampleRate))
-
-	enc, err := opus.NewEncoder(
-		sampleRate,
-		channels,
-		opus.AppAudio,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create encoder: %w", err)
-	}
-
-	packetGen, err := pkgwn.NewOpusWhiteNoiseGenerator(
-		"WhiteNoise", enc, channels, samplesPerPacket, pkgtracks.DefaultMaxPayloadSize,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create white noise RTP packet generator: %w", err)
-	}
 
 	// Create a new audio track
-	track, err := pkgtracks.NewTrackHandle(fmt.Sprintf("stream-%s", remoteNodeID), frameIntv, sampleRate, channels, packetGen)
+	track, err := pkgtracks.NewTrackHandle(fmt.Sprintf("stream-%s", remoteNodeID), frameIntv, sampleRate, channels, selectedGenerator)
 	if err != nil {
 		return fmt.Errorf("failed to create track: %w", err)
 	}
