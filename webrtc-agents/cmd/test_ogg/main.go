@@ -5,7 +5,7 @@ import (
 	"time"
 
 	pkgtracks "webrtc-agents/pkg/tracks"
-	pkgwn "webrtc-agents/pkg/tracks/wn"
+	pkgsine "webrtc-agents/pkg/tracks/sine"
 
 	"github.com/google/uuid"
 	"github.com/hraban/opus"
@@ -33,11 +33,12 @@ func main() {
 		log.Fatalf("failed to create encoder: %v", err)
 	}
 
-	packetGen, err := pkgwn.NewOpusWhiteNoiseGenerator(
-		enc, channels, samplesPerPacket, pkgtracks.DefaultMaxPayloadSize,
+	frequency := 440.0 // A4 note (440 Hz)
+	packetGen, err := pkgsine.NewOpusSineWaveformGenerator(
+		enc, channels, samplesPerPacket, pkgtracks.DefaultMaxPayloadSize, frequency, sampleRate,
 	)
 	if err != nil {
-		log.Fatalf("failed to create white noise RTP packet generator: %v", err)
+		log.Fatalf("failed to create sine waveform RTP packet generator: %v", err)
 	}
 
 	// Create a new audio track
