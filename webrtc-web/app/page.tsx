@@ -773,6 +773,7 @@ function attachPeerConnectionEventListeners(
     audioCtxRef.current = new AudioContext();
     console.log("[dbg] [track] audio context created:", audioCtxRef.current);
   }
+
   const logSource = logId ? ` [${logId}]` : "";
   // registering event handlers for peerconnection handle
   peerConnection.oniceconnectionstatechange = (event) => {
@@ -923,9 +924,11 @@ function attachPeerConnectionEventListeners(
 
     const audioStream = new MediaStream([event.track]);
     const sourceNode = globalAudioCtx.createMediaStreamSource(audioStream);
+    // const sourceNode = globalAudioCtx.createOscillator();
     const gainNode =
       connTrackRef.current?.[remoteNodeId]?.audioRef?.gainNode ||
       globalAudioCtx.createGain();
+    gainNode.gain.value = 0.1;
     sourceNode.connect(gainNode);
     gainNode.connect(globalAudioCtx.destination);
 
@@ -934,8 +937,22 @@ function attachPeerConnectionEventListeners(
       gainNode.disconnect();
       sourceNode.disconnect();
     };
+    // Ensure AudioContext is running (resume if suspended)
+    if (globalAudioCtx.state === "suspended") {
+      console.log(
+        `[dbg]${logSource} AudioContext is suspended, resuming for track from ${remoteNodeId}...`,
+      );
+      globalAudioCtx.resume().then(() => {
+        console.log(
+          `[dbg]${logSource} AudioContext resumed, state:`,
+          globalAudioCtx.state,
+        );
+      });
+    }
     console.log(
       `[dbg]${logSource} Track from ${remoteNodeId} is started`,
+      "context:",
+      globalAudioCtx,
       "stream:",
       audioStream,
       "source:",
