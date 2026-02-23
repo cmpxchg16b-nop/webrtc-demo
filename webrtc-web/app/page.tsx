@@ -2004,16 +2004,140 @@ export default function Home() {
                     position: "relative",
                   }}
                 >
+                  {/* Mock messages for testing RenderSongTrack UI */}
                   <RenderMessage
                     message={{
-                      messageId: "1",
+                      messageId: "mock-1",
                       fromNodeId: nodeId,
                       toNodeId: activeConn,
                       acked: true,
                       songTrack: {
-                        label: "Some Mock Random Song",
+                        label: "Short",
                       },
                       timestamp: 1771823754093,
+                    }}
+                    onAmend={(amendedMsg) => {
+                      sendAmendMsg(amendedMsg);
+                    }}
+                    onDelete={(deletedMsgId) => {
+                      sendMsgDeleteRequest(activeConn, deletedMsgId);
+                    }}
+                    fileTransferStatus={
+                      connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                    }
+                    userPreferenceMap={userPreferenceMap}
+                  />
+                  <RenderMessage
+                    message={{
+                      messageId: "mock-2",
+                      fromNodeId: activeConn,
+                      toNodeId: nodeId,
+                      acked: true,
+                      songTrack: {
+                        label: "Medium Length Song Title",
+                        started: true,
+                        volume: 0.75,
+                      },
+                      timestamp: 1771823754094,
+                    }}
+                    onAmend={(amendedMsg) => {
+                      sendAmendMsg(amendedMsg);
+                    }}
+                    onDelete={(deletedMsgId) => {
+                      sendMsgDeleteRequest(activeConn, deletedMsgId);
+                    }}
+                    fileTransferStatus={
+                      connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                    }
+                    userPreferenceMap={userPreferenceMap}
+                  />
+                  <RenderMessage
+                    message={{
+                      messageId: "mock-3",
+                      fromNodeId: nodeId,
+                      toNodeId: activeConn,
+                      acked: true,
+                      songTrack: {
+                        label:
+                          "This is a Very Long Song Title That Should Test How The Component Handles Overflow and Text Wrapping in The UI",
+                        started: false,
+                        volume: 0.3,
+                      },
+                      timestamp: 1771823754095,
+                    }}
+                    onAmend={(amendedMsg) => {
+                      sendAmendMsg(amendedMsg);
+                    }}
+                    onDelete={(deletedMsgId) => {
+                      sendMsgDeleteRequest(activeConn, deletedMsgId);
+                    }}
+                    fileTransferStatus={
+                      connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                    }
+                    userPreferenceMap={userPreferenceMap}
+                  />
+                  <RenderMessage
+                    message={{
+                      messageId: "mock-4",
+                      fromNodeId: activeConn,
+                      toNodeId: nodeId,
+                      acked: true,
+                      songTrack: {
+                        label: "Loading Track (No Track Object)",
+                        started: false,
+                        volume: 0.5,
+                      },
+                      timestamp: 1771823754096,
+                    }}
+                    onAmend={(amendedMsg) => {
+                      sendAmendMsg(amendedMsg);
+                    }}
+                    onDelete={(deletedMsgId) => {
+                      sendMsgDeleteRequest(activeConn, deletedMsgId);
+                    }}
+                    fileTransferStatus={
+                      connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                    }
+                    userPreferenceMap={userPreferenceMap}
+                  />
+                  <RenderMessage
+                    message={{
+                      messageId: "mock-5",
+                      fromNodeId: nodeId,
+                      toNodeId: activeConn,
+                      acked: true,
+                      songTrack: {
+                        label:
+                          "🎵 Emoji Test 🎶 - Testing Unicode Characters in Song Names",
+                        started: true,
+                        volume: 1.0,
+                      },
+                      timestamp: 1771823754097,
+                    }}
+                    onAmend={(amendedMsg) => {
+                      sendAmendMsg(amendedMsg);
+                    }}
+                    onDelete={(deletedMsgId) => {
+                      sendMsgDeleteRequest(activeConn, deletedMsgId);
+                    }}
+                    fileTransferStatus={
+                      connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
+                    }
+                    userPreferenceMap={userPreferenceMap}
+                  />
+                  <RenderMessage
+                    message={{
+                      messageId: "mock-6",
+                      fromNodeId: activeConn,
+                      toNodeId: nodeId,
+                      acked: true,
+                      songTrack: {
+                        label:
+                          "Ambient Music - Relaxing Nature Sounds for Meditation and Sleep",
+                        started: true,
+                        volume: 0.5,
+                      },
+                      timestamp: 1771823754098,
                     }}
                     onAmend={(amendedMsg) => {
                       sendAmendMsg(amendedMsg);
