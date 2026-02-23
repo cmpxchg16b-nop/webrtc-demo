@@ -575,6 +575,13 @@ func (h *TrackHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID
 				log.Printf("[webrtc] Failed to send ACK: %v", err)
 			}
 
+			// Handle /start command - show usage/help
+			if msg == "/start" {
+				log.Printf("[webrtc] Received /start command from peer %s", remoteNodeID)
+				h.sendChatResponse(dc, &chatMsg, h.formatHelp())
+				return
+			}
+
 			// Handle /list command - list all available tracks
 			if msg == "/list" {
 				log.Printf("[webrtc] Received /list command from peer %s", remoteNodeID)
@@ -616,24 +623,6 @@ func (h *TrackHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNodeID
 				return
 			}
 
-			// Handle /start command (deprecated - use /play instead)
-			if msg == "/start" {
-				log.Printf("[webrtc] Received /start command from peer %s (deprecated, use /play)", remoteNodeID)
-				entry, found := h.peerConnStore.Get(remoteNodeID)
-				if !found {
-					log.Printf("[webrtc] No peer connection found for peer %s", remoteNodeID)
-					return
-				}
-				// Default to first generator if available
-				if len(h.generators) == 0 {
-					h.sendChatResponse(dc, &chatMsg, "Error: No tracks available.")
-					return
-				}
-				if err := h.createAndAddTrack(entry, remoteNodeID, signallingTx, h.generators[0].GetName()); err != nil {
-					log.Printf("[webrtc] Failed to create track for peer %s: %v", remoteNodeID, err)
-				}
-				return
-			}
 		}
 
 	})
@@ -654,6 +643,17 @@ func (h *TrackHandler) formatTrackList() string {
 	}
 	result += "\nUse /play <track_name> to play a track."
 	return result
+}
+
+// formatHelp returns a formatted string with usage information
+func (h *TrackHandler) formatHelp() string {
+	return `🎵 WebRTC Audio Bot - Available Commands:
+
+/start - Show this help message
+/list - List all available audio tracks
+/play <track_name> - Play a specific audio track
+
+Example: /play ambient_music`
 }
 
 // sendChatResponse sends a chat message response back to the peer
