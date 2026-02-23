@@ -304,7 +304,6 @@ function RenderSongTrack(props: { songTrackMsgPayload: ChatMessageSongTrack }) {
         padding: 2,
         minWidth: 280,
         maxWidth: 400,
-        opacity: hasTrack ? 1 : 0.6,
       }}
     >
       {/* Album art / Thumbnail - only show if thumbnail exists */}
@@ -330,38 +329,37 @@ function RenderSongTrack(props: { songTrackMsgPayload: ChatMessageSongTrack }) {
       {/* Track info and controls */}
       <Box sx={{ flex: 1, minWidth: 0 }}>
         {/* Track name */}
-        <Typography
-          variant="subtitle1"
-          noWrap
-          sx={{ fontWeight: 500, marginBottom: 1 }}
-        >
+        <Typography noWrap sx={{ fontWeight: 500, marginBottom: 1 }}>
           {songTrackMsgPayload.label || "Unknown Track"}
         </Typography>
 
-        {/* Progress bar / waveform visualization */}
-        <Box
-          sx={{
-            height: 4,
-            backgroundColor: "divider",
-            borderRadius: 2,
-            marginBottom: 1,
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              height: "100%",
-              width: isPlaying ? "60%" : "0%",
-              backgroundColor: "primary.main",
-              borderRadius: 2,
-              transition: "width 0.3s ease",
-            }}
-          />
-        </Box>
+        {/* Progress bar / waveform visualization - only show when playing */}
+        {isPlaying && (
+          <Box sx={{ paddingTop: 1, paddingBottom: 2 }}>
+            <Box
+              sx={{
+                height: 4,
+                backgroundColor: "divider",
+                borderRadius: 2,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  height: "100%",
+                  width: "60%",
+                  backgroundColor: "primary.main",
+                  borderRadius: 2,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </Box>
+          </Box>
+        )}
 
         {/* Controls row */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -413,16 +411,6 @@ function RenderSongTrack(props: { songTrackMsgPayload: ChatMessageSongTrack }) {
             {Math.round(volume * 100)}%
           </Typography>
         </Box>
-
-        {/* Status indicator */}
-        {!hasTrack && (
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", fontStyle: "italic" }}
-          >
-            Track loading...
-          </Typography>
-        )}
       </Box>
     </Box>
   );

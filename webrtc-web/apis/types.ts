@@ -173,6 +173,11 @@ export type ChatMessageACK = {
   messageId: string;
 };
 
+export interface ChatMessageSongTrackProgress {
+  totalDurationMilliseconds: number;
+  playedMilliseconds: number;
+}
+
 export interface ChatMessageSongTrack {
   // The track we use to retrieve the waveform of the song/music
   // if this is nil, then the track is not ready to play
@@ -187,6 +192,8 @@ export interface ChatMessageSongTrack {
   volume?: number;
 
   thumbnail?: ChatMessageThumbnail;
+
+  progress?: ChatMessageSongTrackProgress;
 }
 
 export type ChatMessage = {
