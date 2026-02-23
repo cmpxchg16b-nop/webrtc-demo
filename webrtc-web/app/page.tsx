@@ -1113,7 +1113,7 @@ function transmitFileData(
   };
 
   doSendChunks();
-  fileDC.onbufferedamountlow = (event) => {
+  fileDC.onbufferedamountlow = () => {
     doSendChunks();
   };
 }
@@ -1331,7 +1331,7 @@ function determineFollowingMode(msgsBox: HTMLDivElement) {
 
 export default function Home() {
   const [connTrackStatus, setConnTrackStatus] = useState<ConnTrackStatus>({});
-  const audioCtxRef = useRef<AudioContext | null>();
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   const {
     rtt,
@@ -1425,7 +1425,7 @@ export default function Home() {
       pingDC.onerror = (ev) => {
         console.error(`[dbg] [${logSource}] ping data channel error`, ev);
       };
-      pingDC.onclose = (ev) => {
+      pingDC.onclose = () => {
         if (ent.pingSeqRef) {
           if (
             ent.pingSeqRef.timer !== undefined &&
@@ -1477,7 +1477,7 @@ export default function Home() {
       };
       const pingSeqRef: PingStateRef = { seq: 0, txMap: {} };
       ent.pingSeqRef = pingSeqRef;
-      pingDC.onopen = (ev) => {
+      pingDC.onopen = () => {
         pingSeqRef.timer = setInterval(() => {
           const pingPayload: ChatMessagePing = {
             direction: ChatMessagePingDirection.Ping,
