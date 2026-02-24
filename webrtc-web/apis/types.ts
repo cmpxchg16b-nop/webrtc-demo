@@ -179,9 +179,7 @@ export interface ChatMessageSongTrackProgress {
 }
 
 export interface ChatMessageSongTrack {
-  // The track we use to retrieve the waveform of the song/music
-  // if this is nil, then the track is not ready to play
-  track?: AudioNode | AudioScheduledSourceNode;
+  track?: MediaStreamTrack;
 
   // mostly like be the name of the song/music
   label: string;

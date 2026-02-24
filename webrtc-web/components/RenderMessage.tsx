@@ -289,48 +289,35 @@ function RenderGenericAttachment(props: {
 }
 
 function playSong(
-  track: AudioNode | AudioScheduledSourceNode,
-  audioContextRef: RefObject<AudioContext | null>,
-  gainNode: GainNode,
+  track: MediaStreamTrack,
+  audioContext: AudioContext,
+  sourceNodeRef: RefObject<AudioNode | null>,
+  gainNodeRef: RefObject<GainNode | null>,
   volume: number,
 ) {
-  const audioContext = audioContextRef.current;
-  if (audioContext) {
-    track.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    gainNode.gain.value = volumeToGainValue(
-      volume,
-      gainNode.gain.minValue,
-      gainNode.gain.maxValue,
-    );
-    if ("start" in track) {
-      track.start();
-    }
+  if (!gainNodeRef.current) {
+    gainNodeRef.current = audioContext.createGain();
+    gainNodeRef.current!.gain.value = volume;
   }
+  if (!sourceNodeRef.current) {
+    const mediaStream = new MediaStream([track]);
+    const sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    sourceNodeRef.current = sourceNode;
+  }
+  gainNodeRef.current!.gain.value = volume;
+  sourceNodeRef.current!.connect(gainNodeRef.current!);
+  gainNodeRef.current!.connect(audioContext.destination);
 }
 
 function stopSong(
-  track: AudioNode | AudioScheduledSourceNode,
-  audioContextRef: RefObject<AudioContext | null>,
-  gainNode: GainNode,
+  sourceNodeRef: RefObject<AudioNode | null>,
+  gainNodeRef: RefObject<GainNode | null>,
 ) {
-  const audioContext = audioContextRef.current;
-  if (audioContext) {
-    if ("stop" in track) {
-      track.stop();
-    }
-    track.disconnect();
-    gainNode.disconnect();
-  }
+  sourceNodeRef.current?.disconnect?.();
+  gainNodeRef.current?.disconnect?.();
 }
 
 const defaultVolume = 0.5;
-
-// vol is something between 0 and 1
-function volumeToGainValue(vol: number, min: number, max: number) {
-  return vol;
-  return min + (max - min) * vol;
-}
 
 function RenderSongTrack(props: {
   audioContextRef: RefObject<AudioContext | null>;
@@ -346,19 +333,7 @@ function RenderSongTrack(props: {
   const track = songTrackMsgPayload.track;
 
   const gainNodeRef = useRef<GainNode | null>(null);
-  useEffect(() => {
-    if (!gainNodeRef.current) {
-      const gainNode = audioContextRef.current?.createGain();
-      if (gainNode) {
-        gainNodeRef.current = gainNode;
-        gainNode.gain.value = volumeToGainValue(
-          volume,
-          gainNode.gain.minValue,
-          gainNode.gain.maxValue,
-        );
-      }
-    }
-  }, []);
+  const sourceNodeRef = useRef<AudioNode | null>(null);
 
   return (
     <Box
@@ -398,7 +373,7 @@ function RenderSongTrack(props: {
         </Typography>
 
         {/* Progress bar / waveform visualization - only show when playing */}
-        {isPlaying && (
+        {isPlaying && songTrackMsgPayload?.progress !== undefined && (
           <Box sx={{ paddingTop: 1, paddingBottom: 2 }}>
             <Box
               sx={{
@@ -444,15 +419,21 @@ function RenderSongTrack(props: {
               },
             }}
             onClick={() => {
-              const gainNode = gainNodeRef.current;
-              if (track && gainNode) {
-                if (isPlaying) {
-                  stopSong(track, audioContextRef, gainNode);
-                  setIsPlaying(false);
-                } else {
-                  playSong(track, audioContextRef, gainNode, volume);
-                  setIsPlaying(true);
+              if (isPlaying) {
+                stopSong(sourceNodeRef, gainNodeRef);
+                setIsPlaying(false);
+              } else {
+                const audioContext = audioContextRef.current;
+                if (audioContext && track) {
+                  playSong(
+                    track,
+                    audioContext,
+                    sourceNodeRef,
+                    gainNodeRef,
+                    volume,
+                  );
                 }
+                setIsPlaying(true);
               }
             }}
           >

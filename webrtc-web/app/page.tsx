@@ -770,7 +770,7 @@ function attachPeerConnectionEventListeners(
   connTrackRef: RefObject<ConnTrack>,
 ) {
   if (!audioCtxRef.current) {
-    audioCtxRef.current = new AudioContext();
+    audioCtxRef.current = new AudioContext({});
     console.log("[dbg] [track] audio context created:", audioCtxRef.current);
   }
 
@@ -915,79 +915,27 @@ function attachPeerConnectionEventListeners(
       return;
     }
 
-    // Debug track state
-    console.log(
-      `[dbg]${logSource} Track state from ${remoteNodeId}:`,
-      "muted:",
-      event.track.muted,
-      "enabled:",
-      event.track.enabled,
-      "readyState:",
-      event.track.readyState,
-      "settings:",
-      event.track.getSettings(),
-    );
-
-    // Listen for mute/unmute events
-    event.track.onmute = () => {
-      console.log(`[dbg]${logSource} Track from ${remoteNodeId} is MUTED`);
-    };
-    event.track.onunmute = () => {
-      console.log(`[dbg]${logSource} Track from ${remoteNodeId} is UNMUTED`);
-    };
-
-    const globalAudioCtx = audioCtxRef.current;
-    if (!globalAudioCtx) {
-      throw new Error(
-        "AudioContext is not initialized, make sure it is initialized at start globally",
-      );
-    }
-
-    const audioStream = new MediaStream([event.track]);
-    const sourceNode = globalAudioCtx.createMediaStreamSource(audioStream);
-    // const sourceNode = globalAudioCtx.createOscillator();
-    const gainNode =
-      connTrackRef.current?.[remoteNodeId]?.audioRef?.gainNode ||
-      globalAudioCtx.createGain();
-    gainNode.gain.value = 0.1;
-    sourceNode.connect(gainNode);
-    gainNode.connect(globalAudioCtx.destination);
-
-    event.track.onended = () => {
-      console.log(`[dbg]${logSource} Track from ${remoteNodeId} is ended`);
-      gainNode.disconnect();
-      sourceNode.disconnect();
-    };
-    // Ensure AudioContext is running (resume if suspended)
-    if (globalAudioCtx.state === "suspended") {
-      console.log(
-        `[dbg]${logSource} AudioContext is suspended, resuming for track from ${remoteNodeId}...`,
-      );
-      globalAudioCtx.resume().then(() => {
-        console.log(
-          `[dbg]${logSource} AudioContext resumed, state:`,
-          globalAudioCtx.state,
-        );
-      });
-    }
-    console.log(
-      `[dbg]${logSource} Track from ${remoteNodeId} is started`,
-      "context:",
-      globalAudioCtx,
-      "stream:",
-      audioStream,
-      "source:",
-      sourceNode,
-      "gain:",
-      gainNode,
-    );
-    if (connTrackRef.current?.[remoteNodeId]) {
-      if (!connTrackRef.current[remoteNodeId].audioRef) {
-        connTrackRef.current[remoteNodeId].audioRef = {};
-      }
-      connTrackRef.current[remoteNodeId].audioRef!.sourceNode = sourceNode;
-      connTrackRef.current[remoteNodeId].audioRef!.gainNode = gainNode;
-    }
+    setConnTrackStatus((prev) => {
+      return {
+        ...prev,
+        [remoteNodeId]: {
+          ...(prev[remoteNodeId] ?? {}),
+          messages: [
+            ...(prev[remoteNodeId]?.messages ?? []),
+            {
+              messageId: crypto.randomUUID(),
+              fromNodeId: remoteNodeId,
+              toNodeId: nodeIdRef.current,
+              timestamp: Date.now(),
+              songTrack: {
+                label: event.track.label,
+                track: event.track,
+              },
+            },
+          ],
+        },
+      };
+    });
   };
 }
 
@@ -1416,91 +1364,6 @@ export default function Home() {
   });
   const [activeConn, setActiveConn] = useState("");
   const [showPreferenceDialog, setShowPreferenceDialog] = useState(false);
-
-  const mockNormalMessages = useMemo<ChatMessage[]>(() => {
-    return [
-      {
-        messageId: "mock-1",
-        fromNodeId: nodeId,
-        toNodeId: activeConn,
-        acked: true,
-        songTrack: {
-          label: "Short",
-        },
-        timestamp: 1771823754093,
-      },
-      {
-        messageId: "mock-2",
-        fromNodeId: activeConn,
-        toNodeId: nodeId,
-        acked: true,
-        songTrack: {
-          label: "Medium Length Song Title",
-          started: true,
-          volume: 0.75,
-        },
-        timestamp: 1771823754094,
-      },
-      {
-        messageId: "mock-3",
-        fromNodeId: nodeId,
-        toNodeId: activeConn,
-        acked: true,
-        songTrack: {
-          label:
-            "This is a Very Long Song Title That Should Test How The Component Handles Overflow and Text Wrapping in The UI",
-          started: false,
-          volume: 0.3,
-        },
-        timestamp: 1771823754095,
-      },
-      {
-        messageId: "mock-4",
-        fromNodeId: activeConn,
-        toNodeId: nodeId,
-        acked: true,
-        songTrack: {
-          label: "Loading Track (No Track Object)",
-          started: false,
-          volume: 0.5,
-        },
-        timestamp: 1771823754096,
-      },
-      {
-        messageId: "mock-5",
-        fromNodeId: nodeId,
-        toNodeId: activeConn,
-        acked: true,
-        songTrack: {
-          label: "🎵 Emoji Test 🎶 - Testing Unicode Characters in Song Names",
-          started: true,
-          volume: 1.0,
-        },
-        timestamp: 1771823754097,
-      },
-    ];
-  }, [nodeId, activeConn]);
-
-  const mockMusicMessage = useMemo(() => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext({ sampleRate: 48000 });
-    }
-    return {
-      messageId: "mock-6",
-      fromNodeId: activeConn,
-      toNodeId: nodeId,
-      acked: true,
-      songTrack: {
-        label:
-          "Ambient Music - Relaxing Nature Sounds for Meditation and Sleep",
-        volume: 0.5,
-        track: audioCtxRef.current!.createOscillator(),
-      },
-      timestamp: 1771823754098,
-    } as ChatMessage;
-  }, []);
-
-  const mockMessages = [...mockNormalMessages, mockMusicMessage];
 
   const switchActiveConn = (
     remoteNodeId: string,
@@ -2089,24 +1952,6 @@ export default function Home() {
                     position: "relative",
                   }}
                 >
-                  {/* Mock messages for testing RenderSongTrack UI */}
-                  {mockMessages.map((message) => (
-                    <RenderMessage
-                      message={message}
-                      key={message.messageId}
-                      onAmend={(amendedMsg) => {
-                        sendAmendMsg(amendedMsg);
-                      }}
-                      onDelete={(deletedMsgId) => {
-                        sendMsgDeleteRequest(activeConn, deletedMsgId);
-                      }}
-                      fileTransferStatus={
-                        connTrackStatus?.[activeConn]?.fileTransferStatus ?? {}
-                      }
-                      userPreferenceMap={userPreferenceMap}
-                      audioContextRef={audioCtxRef}
-                    />
-                  ))}
                   {messages.map((message) => (
                     <RenderMessage
                       message={message}
