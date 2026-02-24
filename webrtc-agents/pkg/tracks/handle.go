@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pion/rtp"
 	webrtc "github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
@@ -15,6 +14,7 @@ import (
 
 // TrackHandle implements a TrackLocal interface
 type TrackHandle struct {
+	// trackId serves as the label for the track when appearing as the ontrack event on webrtc
 	trackId               string
 	streamId              string
 	stopChan              chan struct{}
@@ -41,10 +41,10 @@ const DefaultFrameIntv = 20 * time.Millisecond
 const DefaultSampleRate = 48000
 const DefaultChannelsCount = 2
 
-func NewTrackHandle(streamId string, frameIntv time.Duration, sampleRate int, numChannels int, packetGen RTPPacketGenerator) (*TrackHandle, error) {
+func NewTrackHandle(streamId string, trackId string, frameIntv time.Duration, sampleRate int, numChannels int, packetGen RTPPacketGenerator) (*TrackHandle, error) {
 
 	wh := &TrackHandle{
-		trackId:               fmt.Sprintf("audio-%s", uuid.New().String()),
+		trackId:               trackId,
 		streamId:              streamId,
 		stopChan:              make(chan struct{}),
 		sampleRate:            sampleRate,

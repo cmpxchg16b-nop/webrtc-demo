@@ -751,8 +751,17 @@ func (h *TrackHandler) createAndAddTrack(entry *PeerConnEntry, remoteNodeID stri
 	sampleRate := pkgtracks.DefaultSampleRate
 	channels := pkgtracks.DefaultChannelsCount
 
+	streamId := "stream-" + uuid.NewString()
+	trackId := "track-" + uuid.NewString()
+
 	// Create a new audio track
-	track, err := pkgtracks.NewTrackHandle(fmt.Sprintf("stream-%s", remoteNodeID), frameIntv, sampleRate, channels, selectedGenerator)
+	track, err := pkgtracks.NewTrackHandle(
+		streamId,
+		trackId,
+		frameIntv,
+		sampleRate,
+		channels,
+		selectedGenerator)
 	if err != nil {
 		return fmt.Errorf("failed to create track: %w", err)
 	}
