@@ -336,6 +336,8 @@ function FFTVisualization(props: { fftSize: number; updateIntvMs: number }) {
   const { fftSize, updateIntvMs } = props;
   // bins are a series of measures of frequency strengths, in [0, 1], real numbers.
   const [bins, setBins] = useState<number[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const addSample = (sample: number) => {
     setBins((prev) => {
       if (fftSize <= 0) {
@@ -353,9 +355,94 @@ function FFTVisualization(props: { fftSize: number; updateIntvMs: number }) {
     const it = setInterval(() => {
       addSample(Math.random());
     }, updateIntvMs);
+    return () => clearInterval(it);
   }, [updateIntvMs]);
 
-  return <Box sx={{ height: "100%" }}></Box>;
+  // Draw the visualization with bezier curves
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Get actual canvas dimensions
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Clear canvas
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    // Don't draw if bins.length <= 1
+    if (bins.length <= 1) return;
+
+    const width = rect.width;
+    const height = rect.height;
+    const padding = 0;
+    const drawWidth = width - padding * 2;
+    const drawHeight = height - padding * 2;
+
+    // Calculate points for bezier curve
+    const points: { x: number; y: number }[] = bins.map((bin, i) => ({
+      x: padding + (i / (bins.length - 1)) * drawWidth,
+      y: padding + (1 - Math.max(0, Math.min(1, bin))) * drawHeight,
+    }));
+
+    // Draw filled area under curve
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, height - padding);
+
+    // Draw bezier curve through points
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0) {
+        ctx.lineTo(points[i].x, points[i].y);
+      } else {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const cpX = (prev.x + curr.x) / 2;
+        ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
+      }
+    }
+
+    ctx.lineTo(points[points.length - 1].x, height - padding);
+    ctx.closePath();
+
+    // Fill with gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, "rgba(25, 118, 210, 0.4)");
+    gradient.addColorStop(1, "rgba(25, 118, 210, 0.1)");
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Draw the curve line on top
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpX = (prev.x + curr.x) / 2;
+      ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
+    }
+
+    ctx.strokeStyle = "#1976d2"; // primary.main color
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }, [bins]);
+
+  return (
+    <Box sx={{ height: "100%", width: "100%" }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: "100%", height: "100%", display: "block" }}
+      />
+    </Box>
+  );
 }
 
 function RenderSongTrack(props: {
@@ -363,7 +450,7 @@ function RenderSongTrack(props: {
   songTrackMsgPayload: ChatMessageSongTrack;
 }) {
   const { songTrackMsgPayload, audioContextRef } = props;
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [volume, setVolume] = useState<number>(
     songTrackMsgPayload.volume ?? defaultVolume,
   );
@@ -373,7 +460,7 @@ function RenderSongTrack(props: {
 
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<AudioNode | null>(null);
-  const fftSize = 2048;
+  const fftSize = 128;
 
   return (
     <Fragment>
