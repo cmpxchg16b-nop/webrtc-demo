@@ -318,9 +318,9 @@ function playSong(
   }
 
   gainNodeRef.current!.gain.value = volume;
-  sourceNodeRef.current!.connect(analyzerNodeRef.current!);
-  analyzerNodeRef.current!.connect(gainNodeRef.current!);
-  gainNodeRef.current!.connect(audioContext.destination);
+  sourceNodeRef.current!.connect(gainNodeRef.current!);
+  gainNodeRef.current!.connect(analyzerNodeRef.current!);
+  analyzerNodeRef.current!.connect(audioContext.destination);
   audioContext.resume();
 
   // quirks of Chrome, I have to create a Audio Element to make it happy to play
@@ -598,6 +598,13 @@ function RenderSongTrack(props: {
             <Slider
               size="small"
               value={volume * 100}
+              onChange={(_, vRaw) => {
+                const v = vRaw / 100;
+                setVolume(v);
+                if (gainNodeRef.current) {
+                  gainNodeRef.current.gain.value = v;
+                }
+              }}
               disabled={!track}
               sx={{
                 flex: 1,
