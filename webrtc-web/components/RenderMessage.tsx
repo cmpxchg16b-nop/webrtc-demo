@@ -294,6 +294,8 @@ function playSong(
   audioContext: AudioContext,
   sourceNodeRef: RefObject<AudioNode | null>,
   gainNodeRef: RefObject<GainNode | null>,
+  analyzerNodeRef: RefObject<AnalyserNode | null>,
+  fftSize: number,
   volume: number,
 ) {
   if (!gainNodeRef.current) {
@@ -310,8 +312,14 @@ function playSong(
     // sourceNodeRef.current = sineWave;
     // sineWave.start();
   }
+  if (!analyzerNodeRef.current) {
+    analyzerNodeRef.current = audioContext.createAnalyser();
+    analyzerNodeRef.current.fftSize = fftSize;
+  }
+
   gainNodeRef.current!.gain.value = volume;
-  sourceNodeRef.current!.connect(gainNodeRef.current!);
+  sourceNodeRef.current!.connect(analyzerNodeRef.current!);
+  analyzerNodeRef.current!.connect(gainNodeRef.current!);
   gainNodeRef.current!.connect(audioContext.destination);
   audioContext.resume();
 
@@ -325,15 +333,21 @@ function playSong(
 function stopSong(
   sourceNodeRef: RefObject<AudioNode | null>,
   gainNodeRef: RefObject<GainNode | null>,
+  analyzerNodeRef: RefObject<AnalyserNode | null>,
 ) {
   sourceNodeRef.current?.disconnect?.();
   gainNodeRef.current?.disconnect?.();
+  analyzerNodeRef.current?.disconnect?.();
 }
 
 const defaultVolume = 0.5;
 
-function FFTVisualization(props: { fftSize: number; updateIntvMs: number }) {
-  const { fftSize, updateIntvMs } = props;
+function FFTVisualization(props: {
+  fftSize: number;
+  updateIntvMs: number;
+  analyzerNodeRef: RefObject<AnalyserNode | null>;
+}) {
+  const { fftSize, updateIntvMs, analyzerNodeRef } = props;
   // bins are a series of measures of frequency strengths, in [0, 1], real numbers.
   const [bins, setBins] = useState<number[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -353,7 +367,20 @@ function FFTVisualization(props: { fftSize: number; updateIntvMs: number }) {
 
   useEffect(() => {
     const it = setInterval(() => {
-      addSample(Math.random());
+      // addSample(Math.random());
+      const analyzerNode = analyzerNodeRef.current;
+      if (!analyzerNode) return;
+      const bufferLength = analyzerNode.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyzerNode.getByteFrequencyData(dataArray);
+      const normalizedData = dataArray.map((value) => value / 255);
+      setBins((prev) => {
+        let newBins = [...prev, ...normalizedData];
+        if (newBins.length > fftSize) {
+          newBins = newBins.slice(1);
+        }
+        return newBins;
+      });
     }, updateIntvMs);
     return () => clearInterval(it);
   }, [updateIntvMs]);
@@ -416,23 +443,6 @@ function FFTVisualization(props: { fftSize: number; updateIntvMs: number }) {
     gradient.addColorStop(1, "rgba(25, 118, 210, 0.1)");
     ctx.fillStyle = gradient;
     ctx.fill();
-
-    // Draw the curve line on top
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpX = (prev.x + curr.x) / 2;
-      ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
-    }
-
-    ctx.strokeStyle = "#1976d2"; // primary.main color
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
   }, [bins]);
 
   return (
@@ -450,7 +460,7 @@ function RenderSongTrack(props: {
   songTrackMsgPayload: ChatMessageSongTrack;
 }) {
   const { songTrackMsgPayload, audioContextRef } = props;
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(
     songTrackMsgPayload.volume ?? defaultVolume,
   );
@@ -460,6 +470,7 @@ function RenderSongTrack(props: {
 
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<AudioNode | null>(null);
+  const analyzerNodeRef = useRef<AnalyserNode | null>(null);
   const fftSize = 128;
 
   return (
@@ -474,7 +485,11 @@ function RenderSongTrack(props: {
             width: "100%",
           }}
         >
-          <FFTVisualization fftSize={fftSize} updateIntvMs={20} />
+          <FFTVisualization
+            fftSize={fftSize}
+            updateIntvMs={20}
+            analyzerNodeRef={analyzerNodeRef}
+          />
         </Box>
       )}
       <Box
@@ -567,7 +582,7 @@ function RenderSongTrack(props: {
               }}
               onClick={() => {
                 if (isPlaying) {
-                  stopSong(sourceNodeRef, gainNodeRef);
+                  stopSong(sourceNodeRef, gainNodeRef, analyzerNodeRef);
                   setIsPlaying(false);
                 } else {
                   const audioContext = audioContextRef.current;
@@ -577,6 +592,8 @@ function RenderSongTrack(props: {
                       audioContext,
                       sourceNodeRef,
                       gainNodeRef,
+                      analyzerNodeRef,
+                      fftSize,
                       volume,
                     );
                   }
