@@ -303,10 +303,16 @@ function playSong(
     const mediaStream = new MediaStream([track]);
     const sourceNode = audioContext.createMediaStreamSource(mediaStream);
     sourceNodeRef.current = sourceNode;
+
+    // // for deubgging purposes only
+    // const sineWave = audioContext.createOscillator();
+    // sourceNodeRef.current = sineWave;
+    // sineWave.start();
   }
   gainNodeRef.current!.gain.value = volume;
   sourceNodeRef.current!.connect(gainNodeRef.current!);
   gainNodeRef.current!.connect(audioContext.destination);
+  audioContext.resume();
 }
 
 function stopSong(
