@@ -16,6 +16,9 @@ import (
 type EchoDCHandler struct{}
 
 func (_ *EchoDCHandler) Serve(ctx context.Context, dc *webrtc.DataChannel, signallingTx chan<- pkgframing.MessagePayload) {
+	if dc.Label() != PredefinedDCLabelChat {
+		return
+	}
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		// Parse the message as ChatMessage
