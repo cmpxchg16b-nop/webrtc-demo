@@ -13,9 +13,10 @@ type GenericWebRTCHandler interface {
 
 // Predefined data channel labels
 const (
-	PredefinedDCLabelChat = "chat"
-	PredefinedDCLabelFile = "file"
-	PredefinedDCLabelPing = "ping"
+	PredefinedDCLabelChat      = "chat"
+	PredefinedDCLabelFile      = "file"
+	PredefinedDCLabelPing      = "ping"
+	PredefinedDCLabelMsgStream = "msgpatch"
 )
 
 // ChatMessageFileCategory represents the category of a file

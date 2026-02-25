@@ -13,6 +13,7 @@ import (
 	pkgwsrunner "webrtc-agents/pkg/ws_runner"
 
 	"github.com/alecthomas/kong"
+	"github.com/joho/godotenv"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -24,10 +25,22 @@ var cli struct {
 	ReconnectOnDisconnect bool          `name:"reconnect-on-disconnect" help:"Reconnect on WebSocket disconnect"`
 	ReconnectDelay        time.Duration `name:"reconnect-delay" help:"Delay between reconnect attempts" default:"3s"`
 	OggFiles              []string      `name:"ogg-file" help:"OGG files to load as audio tracks (must be 48kHz stereo)" placeholder:"FILE.ogg"`
+	OpenRouterAPIKeyEnv   string        `name:"openrouter-apikey-env" help:"Environment variable name that stores the OpenRouter API key" default:"OPENROUTER_APIKEY"`
 }
 
 func main() {
 	kong.Parse(&cli)
+
+	// Load .env file if it exists (ignore error if file doesn't exist)
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found or error loading .env file, continuing with existing environment variables")
+	}
+
+	// Read OpenRouter API key from environment variable if specified
+	var openrouterAPIKey string
+	if cli.OpenRouterAPIKeyEnv != "" {
+		openrouterAPIKey = os.Getenv(cli.OpenRouterAPIKeyEnv)
+	}
 
 	// Parse WebSocket URL
 	u, err := url.Parse(cli.WsServer)

@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/ice/v4 v4.2.1 // indirect
