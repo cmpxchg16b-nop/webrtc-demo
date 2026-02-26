@@ -89,7 +89,9 @@ func (s *Sender) CommitMessages(n int) error {
 }
 
 func TestConcurrentSendMessages(t *testing.T) {
-	store := NewSyncMsgsStore()
+	store := NewSyncMsgsStore(func() MsgsCollection {
+		return NewIndexedMsgsCollection()
+	})
 
 	// Define test cases with different senders and message counts
 	testCases := []struct {
@@ -181,7 +183,9 @@ func TestConcurrentSendMessages(t *testing.T) {
 }
 
 func TestSenderSendMessages(t *testing.T) {
-	store := NewSyncMsgsStore()
+	store := NewSyncMsgsStore(func() MsgsCollection {
+		return NewIndexedMsgsCollection()
+	})
 	sender := NewSender(store, "test-sender")
 
 	err := sender.SendMessages(10)
@@ -214,7 +218,9 @@ func TestSenderSendMessages(t *testing.T) {
 }
 
 func TestConcurrentReadWrites(t *testing.T) {
-	store := NewSyncMsgsStore()
+	store := NewSyncMsgsStore(func() MsgsCollection {
+		return NewIndexedMsgsCollection()
+	})
 
 	// Define test cases with different senders and message counts
 	testCases := []struct {
