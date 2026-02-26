@@ -283,11 +283,8 @@ func TestConcurrentReadWrites(t *testing.T) {
 	}
 
 	// Verify each message content using Comparable interface
-	// Note: Due to concurrent reads and writes, sequence numbers may not be contiguous
-	// but each sender should have unique sequence numbers
 	for _, tc := range testCases {
 		messages := coll.store[tc.sender]
-		seqMap := make(map[int]bool)
 
 		for i, msg := range messages {
 			actualMsg, ok := msg.(*MockMessage)
@@ -296,17 +293,15 @@ func TestConcurrentReadWrites(t *testing.T) {
 				continue
 			}
 
-			// Verify sender name
-			if actualMsg.Sender != tc.sender {
-				t.Errorf("Sender %s, message %d: expected sender '%s', got '%s'",
-					tc.sender, i, tc.sender, actualMsg.Sender)
+			expectedMsg := &MockMessage{
+				Sender: tc.sender,
+				Seq:    i,
 			}
 
-			// Check for duplicate sequence numbers
-			if seqMap[actualMsg.Seq] {
-				t.Errorf("Sender %s: duplicate sequence number %d found", tc.sender, actualMsg.Seq)
+			if !actualMsg.IsEqual(expectedMsg) {
+				t.Errorf("Sender %s, message %d: expected {Sender: %s, Seq: %d}, got {Sender: %s, Seq: %d}",
+					tc.sender, i, expectedMsg.Sender, expectedMsg.Seq, actualMsg.Sender, actualMsg.Seq)
 			}
-			seqMap[actualMsg.Seq] = true
 		}
 	}
 }
