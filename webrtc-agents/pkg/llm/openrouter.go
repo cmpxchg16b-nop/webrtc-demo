@@ -25,6 +25,7 @@ const (
 	LLMRoleUser      LLMRole = "user"
 	LLMRoleAssistant LLMRole = "assistant"
 	LLMRoleSystem    LLMRole = "system"
+	LLMRoleTool      LLMRole = "tool"
 )
 
 type OpenRouterMessage struct {
