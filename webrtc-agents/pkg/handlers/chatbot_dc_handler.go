@@ -266,3 +266,18 @@ type OpenRouterCompletionTokensDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens"`
 	AudioTokens     int `json:"audio_tokens"`
 }
+
+type OpenAICompletionRequestMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type OpenAICompletionRequestReasoning struct {
+	Enabled bool `json:"enabled"`
+}
+
+type OpenAICompletionRequest struct {
+	Model     string                           `json:"model"`
+	Messages  []OpenAICompletionRequestMessage `json:"messages"`
+	Reasoning OpenAICompletionRequestReasoning `json:"reasoning"`
+}
