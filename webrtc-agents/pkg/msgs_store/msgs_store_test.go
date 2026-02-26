@@ -55,6 +55,39 @@ func (s *Sender) SendMessages(n int) error {
 	return nil
 }
 
+// CommitMessage loads the store, checks for existing messages from this sender,
+// and appends a new message with incremented sequence number
+func (s *Sender) CommitMessage() error {
+	store := s.store.Load()
+
+	var newSeq int
+	if store != nil {
+		coll := store.Load().(*IndexedMsgsCollection)
+		messages := coll.store[s.sender]
+		if len(messages) > 0 {
+			lastMsg := messages[len(messages)-1].(*MockMessage)
+			newSeq = lastMsg.Seq + 1
+		}
+	}
+
+	msg := &MockMessage{
+		Sender: s.sender,
+		Seq:    newSeq,
+	}
+
+	return s.store.Append(msg)
+}
+
+// CommitMessages calls CommitMessage n times
+func (s *Sender) CommitMessages(n int) error {
+	for i := 0; i < n; i++ {
+		if err := s.CommitMessage(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestConcurrentSendMessages(t *testing.T) {
 	store := NewSyncMsgsStore()
 
@@ -176,6 +209,104 @@ func TestSenderSendMessages(t *testing.T) {
 		}
 		if mockMsg.Sender != "test-sender" {
 			t.Errorf("Message %d: expected sender 'test-sender', got '%s'", i, mockMsg.Sender)
+		}
+	}
+}
+
+func TestConcurrentReadWrites(t *testing.T) {
+	store := NewSyncMsgsStore()
+
+	// Define test cases with different senders and message counts
+	testCases := []struct {
+		sender string
+		count  int
+	}{
+		{"reader1", 50},
+		{"reader2", 75},
+		{"reader3", 100},
+		{"reader4", 25},
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(testCases))
+
+	for _, tc := range testCases {
+		wg.Add(1)
+		go func(sender string, count int) {
+			defer wg.Done()
+			s := NewSender(store, sender)
+			if err := s.CommitMessages(count); err != nil {
+				errChan <- err
+			}
+		}(tc.sender, tc.count)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
+		if err != nil {
+			t.Errorf("Error committing messages: %v", err)
+		}
+	}
+
+	// Verify the store contains all messages
+	result := store.Load()
+	if result == nil {
+		t.Fatal("Store is nil after committing messages")
+	}
+
+	// Count total messages expected
+	totalExpected := 0
+	for _, tc := range testCases {
+		totalExpected += tc.count
+	}
+
+	// Verify we have the correct number of messages
+	coll := result.Load().(*IndexedMsgsCollection)
+	totalActual := 0
+	for _, messages := range coll.store {
+		totalActual += len(messages)
+	}
+
+	if totalActual != totalExpected {
+		t.Errorf("Expected %d messages, got %d", totalExpected, totalActual)
+	}
+
+	// Verify each sender has the correct number of messages
+	for _, tc := range testCases {
+		messages := coll.store[tc.sender]
+		if len(messages) != tc.count {
+			t.Errorf("Sender %s: expected %d messages, got %d", tc.sender, tc.count, len(messages))
+		}
+	}
+
+	// Verify each message content using Comparable interface
+	// Note: Due to concurrent reads and writes, sequence numbers may not be contiguous
+	// but each sender should have unique sequence numbers
+	for _, tc := range testCases {
+		messages := coll.store[tc.sender]
+		seqMap := make(map[int]bool)
+
+		for i, msg := range messages {
+			actualMsg, ok := msg.(*MockMessage)
+			if !ok {
+				t.Errorf("Sender %s, message %d: failed to cast to MockMessage", tc.sender, i)
+				continue
+			}
+
+			// Verify sender name
+			if actualMsg.Sender != tc.sender {
+				t.Errorf("Sender %s, message %d: expected sender '%s', got '%s'",
+					tc.sender, i, tc.sender, actualMsg.Sender)
+			}
+
+			// Check for duplicate sequence numbers
+			if seqMap[actualMsg.Seq] {
+				t.Errorf("Sender %s: duplicate sequence number %d found", tc.sender, actualMsg.Seq)
+			}
+			seqMap[actualMsg.Seq] = true
 		}
 	}
 }
