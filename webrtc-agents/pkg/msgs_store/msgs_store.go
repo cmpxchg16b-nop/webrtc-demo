@@ -49,25 +49,29 @@ type MsgsCollection interface {
 
 type MsgsStore struct {
 	ResourceVersion string
-	Collection      MsgsCollection
+	collection      MsgsCollection
 }
 
 func NewMsgsStore(backend MsgsCollection) *MsgsStore {
 	return &MsgsStore{
 		ResourceVersion: uuid.NewString(),
-		Collection:      backend,
+		collection:      backend,
 	}
 }
 
 func (store *MsgsStore) DeepClone() *MsgsStore {
 	newMsgsStore := new(MsgsStore)
 	newMsgsStore.ResourceVersion = uuid.NewString()
-	newMsgsStore.Collection = store.Collection.DeepClone()
+	newMsgsStore.collection = store.collection.DeepClone()
 	return newMsgsStore
 }
 
 func (store *MsgsStore) Append(msg interface{}) {
-	store.Collection.Append(msg)
+	store.collection.Append(msg)
+}
+
+func (store *MsgsStore) Load() MsgsCollection {
+	return store.collection
 }
 
 type SyncMsgsStore struct {
