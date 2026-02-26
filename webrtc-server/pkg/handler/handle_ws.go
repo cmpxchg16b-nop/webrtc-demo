@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkgframing "example.com/webrtcserver/pkg/framing"
+	"example.com/webrtcserver/pkg/ws_proxy"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -32,25 +34,11 @@ func (handler *WebsocketHandler) sendBroadcastMsg(payload pkgframing.MessagePayl
 	for key, connent := range handler.cr.Dump() {
 		if wsConn := connent.WSConn; wsConn != nil {
 			log.Printf("Broadcasting message to %s", key)
-			if err := handler.sendMsg(wsConn, payload); err != nil {
+			if err := wsConn.WriteJSON(payload); err != nil {
 				return fmt.Errorf("failed to send response message to %s: %v", key, err)
 			}
 		}
 	}
-	return nil
-}
-
-func (handler *WebsocketHandler) sendMsg(conn *websocket.Conn, payload pkgframing.MessagePayload) error {
-	responseJSON, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response payload: %v", err)
-	}
-
-	err = conn.WriteMessage(websocket.TextMessage, responseJSON)
-	if err != nil {
-		return fmt.Errorf("failed to write response message: %v", err)
-	}
-
 	return nil
 }
 
@@ -63,7 +51,7 @@ func (handler *WebsocketHandler) sendMsgTo(nodeId string, payload pkgframing.Mes
 
 	if nodeEntry != nil {
 		if wsConn := nodeEntry.WSConn; wsConn != nil {
-			if err := handler.sendMsg(wsConn, payload); err != nil {
+			if err := wsConn.WriteJSON(payload); err != nil {
 				return fmt.Errorf("failed to send SDP offer message to %s: %v", payload.SDPOffer.ToNodeId, err)
 			}
 		}
@@ -75,7 +63,7 @@ func (handler *WebsocketHandler) getDefaultUserName(numId int) string {
 	return fmt.Sprintf("user%04d", numId)
 }
 
-func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.Conn, msg []byte, numId int) error {
+func (handler *WebsocketHandler) handleTextMessage(key string, conn *ws_proxy.WebsocketWriteProxy, msg []byte, numId int) error {
 	cr := handler.cr
 	if cr == nil {
 		return fmt.Errorf("connection registry is not set")
@@ -104,7 +92,7 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 			Register: payload.Register,
 			NodeId:   key,
 		}
-		if err := handler.sendMsg(conn, responsePayload); err != nil {
+		if err := conn.WriteJSON(responsePayload); err != nil {
 			return fmt.Errorf("failed to send response message to %s: %v", key, err)
 		}
 	}
@@ -121,7 +109,7 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *websocket.C
 				},
 				NodeId: key,
 			}
-			if err := handler.sendMsg(conn, responsePayload); err != nil {
+			if err := conn.WriteJSON(responsePayload); err != nil {
 				return fmt.Errorf("failed to send response message to %s: %v", key, err)
 			}
 
@@ -197,6 +185,9 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connErrCh := make(chan error)
 
 	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		for {
 			msgType, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -204,9 +195,12 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
+			connProxy := ws_proxy.NewWebsocketWriteProxy(conn)
+			connProxy.Run(ctx)
+
 			switch msgType {
 			case websocket.TextMessage:
-				if err := h.handleTextMessage(remoteKey, conn, msg, numId); err != nil {
+				if err := h.handleTextMessage(remoteKey, connProxy, msg, numId); err != nil {
 					log.Printf("Failed to handle text message from %s: %v", remoteKey, err)
 					continue
 				}
