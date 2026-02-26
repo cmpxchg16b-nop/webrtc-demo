@@ -11,6 +11,17 @@ type MockMessage struct {
 	Seq    int
 }
 
+type Comparable interface {
+	IsEqual(rhs Comparable) bool
+}
+
+func (msg *MockMessage) IsEqual(rhs Comparable) bool {
+	if rhsMsg, ok := rhs.(*MockMessage); ok && rhsMsg != nil {
+		return msg.Sender == rhsMsg.Sender && msg.Seq == rhsMsg.Seq
+	}
+	return false
+}
+
 // GetSenderId implements IdentifiableMessage interface
 func (m *MockMessage) GetSenderId() string {
 	return m.Sender
@@ -110,6 +121,28 @@ func TestConcurrentSendMessages(t *testing.T) {
 		messages := coll.store[tc.sender]
 		if len(messages) != tc.count {
 			t.Errorf("Sender %s: expected %d messages, got %d", tc.sender, tc.count, len(messages))
+		}
+	}
+
+	// Verify each message content using Comparable interface
+	for _, tc := range testCases {
+		messages := coll.store[tc.sender]
+		for i, msg := range messages {
+			actualMsg, ok := msg.(*MockMessage)
+			if !ok {
+				t.Errorf("Sender %s, message %d: failed to cast to MockMessage", tc.sender, i)
+				continue
+			}
+
+			expectedMsg := &MockMessage{
+				Sender: tc.sender,
+				Seq:    i,
+			}
+
+			if !actualMsg.IsEqual(expectedMsg) {
+				t.Errorf("Sender %s, message %d: expected {Sender: %s, Seq: %d}, got {Sender: %s, Seq: %d}",
+					tc.sender, i, expectedMsg.Sender, expectedMsg.Seq, actualMsg.Sender, actualMsg.Seq)
+			}
 		}
 	}
 }
