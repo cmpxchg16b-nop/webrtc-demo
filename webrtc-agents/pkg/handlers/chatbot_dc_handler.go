@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	pkgllm "webrtc-agents/pkg/llm"
@@ -242,7 +243,7 @@ func (h *ChatBotDCHandler) getConversationHistory(sessionID string, ourNodeID st
 		content   string
 	}
 
-	var allMessages []TimestampedMessage
+	allMessages := make([]TimestampedMessage, 0)
 	for _, msg := range messages {
 		if chatMsg, ok := msg.(*ChatHistoryMessage); ok {
 			allMessages = append(allMessages, TimestampedMessage{
@@ -253,14 +254,10 @@ func (h *ChatBotDCHandler) getConversationHistory(sessionID string, ourNodeID st
 		}
 	}
 
-	// Sort by timestamp (bubble sort for simplicity)
-	for i := 0; i < len(allMessages); i++ {
-		for j := i + 1; j < len(allMessages); j++ {
-			if allMessages[i].timestamp > allMessages[j].timestamp {
-				allMessages[i], allMessages[j] = allMessages[j], allMessages[i]
-			}
-		}
-	}
+	// Sort by timestamp
+	sort.Slice(allMessages, func(i, j int) bool {
+		return allMessages[i].timestamp < allMessages[j].timestamp
+	})
 
 	// Convert to LLM message format
 	var llmMessages []pkgllm.OpenRouterCompletionRequestMessage
