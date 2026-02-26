@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	pkgllm "webrtc-agents/pkg/llm"
@@ -159,9 +158,9 @@ func (h *ChatBotDCHandler) setupChatDataChannel(dc *webrtc.DataChannel, remoteNo
 			return
 		}
 
-		// Format and send chat history as response
-		chatHistory := h.formatChatHistory(remoteNodeID, ourNodeID)
-		h.sendChatResponse(dc, &chatMsg, chatHistory, ourNodeID, remoteNodeID)
+		// Generate LLM response
+		responseText := h.generateLLMResponse(context.Background(), remoteNodeID, ourNodeID)
+		h.sendChatResponse(dc, &chatMsg, responseText, ourNodeID, remoteNodeID)
 	})
 
 	dc.OnError(func(err error) {
@@ -190,26 +189,53 @@ func (h *ChatBotDCHandler) sendACK(dc *webrtc.DataChannel, originalMsg *ChatMess
 	}
 }
 
-// formatChatHistory formats all messages in the store as a readable chat history
-func (h *ChatBotDCHandler) formatChatHistory(remoteNodeID string, ourNodeID string) string {
-	store := h.store.Load()
-	if store == nil {
-		return "📝 Chat History: (empty)"
-	}
-
-	coll := store.Load().(*IndexedMsgsCollection)
-
-	var builder strings.Builder
-	builder.WriteString("📝 Chat History:\n")
-	builder.WriteString("─────────────────\n")
-
+// generateLLMResponse generates a response using the LLM based on conversation history
+func (h *ChatBotDCHandler) generateLLMResponse(ctx context.Context, remoteNodeID string, ourNodeID string) string {
 	// Build session ID: "<ourid>-<peerid>"
 	sessionID := fmt.Sprintf("%s-%s", ourNodeID, remoteNodeID)
 
-	// Get all messages for this session
+	// Get conversation history
+	messages := h.getConversationHistory(sessionID, ourNodeID)
+
+	// Build the LLM request
+	request := pkgllm.OpenRouterCompletionRequest{
+		Model: "openai/gpt-3.5-turbo",
+		Messages: []pkgllm.OpenRouterCompletionRequestMessage{
+			{
+				Role:    "system",
+				Content: "You are a helpful assistant. Respond concisely and helpfully to user messages.",
+			},
+		},
+		Reasoning: pkgllm.OpenRouterCompletionRequestReasoning{
+			Enabled: false,
+		},
+	}
+
+	// Add conversation history
+	request.Messages = append(request.Messages, messages...)
+
+	// Generate response from LLM
+	response := h.llmGen.Generate(ctx, request)
+
+	// Extract the response text
+	if len(response.Choices) > 0 && response.Choices[0].Message != nil {
+		return response.Choices[0].Message.Content
+	}
+
+	return "I apologize, but I couldn't generate a response at this time."
+}
+
+// getConversationHistory retrieves and formats the conversation history for the LLM
+func (h *ChatBotDCHandler) getConversationHistory(sessionID string, ourNodeID string) []pkgllm.OpenRouterCompletionRequestMessage {
+	store := h.store.Load()
+	if store == nil {
+		return nil
+	}
+
+	coll := store.Load().(*IndexedMsgsCollection)
 	messages := coll.GetMessagesBySessionId(sessionID)
 
-	// Collect all messages with their timestamps for sorting
+	// Sort messages by timestamp
 	type TimestampedMessage struct {
 		timestamp int64
 		senderID  string
@@ -217,7 +243,6 @@ func (h *ChatBotDCHandler) formatChatHistory(remoteNodeID string, ourNodeID stri
 	}
 
 	var allMessages []TimestampedMessage
-
 	for _, msg := range messages {
 		if chatMsg, ok := msg.(*ChatHistoryMessage); ok {
 			allMessages = append(allMessages, TimestampedMessage{
@@ -228,7 +253,7 @@ func (h *ChatBotDCHandler) formatChatHistory(remoteNodeID string, ourNodeID stri
 		}
 	}
 
-	// Sort by timestamp
+	// Sort by timestamp (bubble sort for simplicity)
 	for i := 0; i < len(allMessages); i++ {
 		for j := i + 1; j < len(allMessages); j++ {
 			if allMessages[i].timestamp > allMessages[j].timestamp {
@@ -237,22 +262,20 @@ func (h *ChatBotDCHandler) formatChatHistory(remoteNodeID string, ourNodeID stri
 		}
 	}
 
-	// Format messages
+	// Convert to LLM message format
+	var llmMessages []pkgllm.OpenRouterCompletionRequestMessage
 	for _, msg := range allMessages {
-		timeStr := time.UnixMilli(msg.timestamp).Format("15:04:05")
-		var senderLabel string
-		if msg.senderID == remoteNodeID {
-			senderLabel = "👤 You"
-		} else {
-			senderLabel = "🤖 Bot"
+		role := "user"
+		if msg.senderID == ourNodeID {
+			role = "assistant"
 		}
-		builder.WriteString(fmt.Sprintf("[%s] %s: %s\n", timeStr, senderLabel, msg.content))
+		llmMessages = append(llmMessages, pkgllm.OpenRouterCompletionRequestMessage{
+			Role:    role,
+			Content: msg.content,
+		})
 	}
 
-	builder.WriteString("─────────────────\n")
-	builder.WriteString(fmt.Sprintf("Total: %d messages", len(allMessages)))
-
-	return builder.String()
+	return llmMessages
 }
 
 // sendChatResponse sends a chat message response back to the peer and stores it
