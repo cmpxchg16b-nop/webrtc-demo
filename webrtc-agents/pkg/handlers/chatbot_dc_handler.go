@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -77,17 +78,25 @@ func (m *ChatHistoryMessage) GetSessionId() string {
 // ChatBotDCHandler handles WebRTC data channel for chatbot functionality
 type ChatBotDCHandler struct {
 	llmGen pkgllm.CompletionGenerator
+	model  string
 	store  *msgs_store.SyncMsgsStore
 }
 
 // NewChatBotDCHandler creates a new ChatBotDCHandler
-func NewChatBotDCHandler(llmGen pkgllm.CompletionGenerator) *ChatBotDCHandler {
+func NewChatBotDCHandler(llmGen pkgllm.CompletionGenerator, model string) (*ChatBotDCHandler, error) {
+	if llmGen == nil {
+		return nil, errors.New("llmGen must be specified")
+	}
+	if model == "" {
+		return nil, errors.New("model must be specified")
+	}
 	return &ChatBotDCHandler{
 		llmGen: llmGen,
+		model:  model,
 		store: msgs_store.NewSyncMsgsStore(func() msgs_store.MsgsCollection {
 			return NewIndexedMsgsCollection()
 		}),
-	}
+	}, nil
 }
 
 // Serve starts the WebRTC handler
@@ -200,7 +209,7 @@ func (h *ChatBotDCHandler) generateLLMResponse(ctx context.Context, remoteNodeID
 
 	// Build the LLM request
 	request := pkgllm.OpenRouterCompletionRequest{
-		Model: "openai/gpt-3.5-turbo",
+		Model: h.model,
 		Messages: []pkgllm.OpenRouterCompletionRequestMessage{
 			{
 				Role:    pkgllm.LLMRoleSystem,

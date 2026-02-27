@@ -27,6 +27,7 @@ var cli struct {
 	ReconnectDelay        time.Duration `name:"reconnect-delay" help:"Delay between reconnect attempts" default:"3s"`
 	OggFiles              []string      `name:"ogg-file" help:"OGG files to load as audio tracks (must be 48kHz stereo)" placeholder:"FILE.ogg"`
 	OpenRouterAPIKeyEnv   string        `name:"openrouter-apikey-env" help:"Environment variable name that stores the OpenRouter API key" default:"OPENROUTER_APIKEY"`
+	ChatBotModel          string        `name:"chatbot-model" help:"The id of the model use for chatbot"`
 }
 
 func main() {
@@ -130,7 +131,11 @@ func main() {
 	chatBotLLM := &pkgllm.OpenRouterCompletionProxy{
 		APIKeyFromEnv: cli.OpenRouterAPIKeyEnv,
 	}
-	chatBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(pkghandlers.NewChatBotDCHandler(chatBotLLM)), cli.ICEServer, cli.Debug, nil)
+	chatBotDCHandler, err := pkghandlers.NewChatBotDCHandler(chatBotLLM, cli.ChatBotModel)
+	if err != nil {
+		log.Fatalf("Failed to create chat bot handler: %v", err)
+	}
+	chatBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(chatBotDCHandler), cli.ICEServer, cli.Debug, nil)
 	chatBotRunner := getWsRunnerByDerivedCfg("ChatBot")
 	go chatBotRunner.Run(ctx, chatBotHandler)
 	log.Println("Chat bot started!")
