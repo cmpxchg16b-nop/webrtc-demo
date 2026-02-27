@@ -14,11 +14,12 @@ import (
 )
 
 type CLI struct {
-	ListenAddr         string        `name:"listen-addr" help:"Address to listen on" default:":3001"`
-	WsTimeout          time.Duration `name:"ws-timeout" help:"WebSocket timeout duration" default:"10s"`
-	WsPath             string        `name:"ws-path" help:"WebSocket path" default:"/ws"`
-	AllowedOrigins     []string      `name:"allowed-origin" help:"Allowed origins for CORS (may be specified multiple times)"`
-	DefaultCorsAllowed bool          `name:"default-cors-allowed" help:"Allow requests with absent Origin header" default:"true"`
+	ListenAddr                string        `name:"listen-addr" help:"Address to listen on" default:":3001"`
+	WsTimeout                 time.Duration `name:"ws-timeout" help:"WebSocket timeout duration" default:"10s"`
+	WsPath                    string        `name:"ws-path" help:"WebSocket path" default:"/ws"`
+	AllowedOrigins            []string      `name:"allowed-origin" help:"Allowed origins for CORS (may be specified multiple times)"`
+	DefaultCorsAllowed        bool          `name:"default-cors-allowed" help:"Allow requests with absent Origin header" default:"true"`
+	InjectAllowAllCorsHeaders bool          `name:"inject-allow-all-cors-headers" help:"Inject CORS headers that allow all origins (for debugging purposes)"`
 }
 
 var cli CLI
@@ -51,7 +52,9 @@ func main() {
 	wsHandler := pkghandler.NewWebsocketHandler(&upgrader, cr, cli.WsTimeout)
 
 	var connsHandler http.Handler = pkghandler.NewConnsHandler(cr)
-	connsHandler = pkghandler.WithCORSAllowAny(connsHandler)
+	if cli.InjectAllowAllCorsHeaders {
+		connsHandler = pkghandler.WithCORSAllowAny(connsHandler)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle(cli.WsPath, wsHandler)
