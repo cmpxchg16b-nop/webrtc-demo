@@ -64,8 +64,9 @@ import { createThumbnailFromFile } from "@/apis/thumbnail";
 import { useUnreads } from "@/apis/unreads";
 import { useScrollTop } from "@/apis/scrollTop";
 import { unmarshalMessagePatchOrder } from "@/apis/message_patch";
+import { getICEServerURLs } from "@/apis/ice";
+import { getSignallingServers } from "@/apis/ws";
 
-const googleStunServer = "stun:stun.l.google.com:19302";
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
 const defaultFileSegmentSize = 128 * 1024;
@@ -997,14 +998,7 @@ function getUserPreferenceMap(conns: ConnEntry[]): Record<string, Preference> {
   return userPreferenceMap;
 }
 
-const servers: WSServer[] = [
-  {
-    url: "ws://localhost:3001/ws",
-    name: "Test Server",
-    id: "test",
-    iceServers: [googleStunServer],
-  },
-];
+const servers: WSServer[] = getSignallingServers();
 
 // onAck will always get called, regardless of whether there is an error or timeout.
 function listenForAck(
