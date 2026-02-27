@@ -41,4 +41,4 @@ $ipCMD1 route del $DN42_ULA_ADDR/128 via fe80::2 dev v-coturn vrf vrf42 2>/dev/n
 $ipCMD2 l del v-dn42 2>/dev/null || true
 $ipCMD1 l del v-coturn 2>/dev/null || true
 
-echo "Successfully disconnected from DN42"
+echo "Successfully executed $(basename "$0")"

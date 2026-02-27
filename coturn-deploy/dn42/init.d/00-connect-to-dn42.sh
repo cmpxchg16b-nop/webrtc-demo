@@ -57,3 +57,5 @@ $ipCMD1 l set v-coturn up
 $ipCMD1 a flush scope link dev v-coturn
 $ipCMD1 a add fe80::1/64 dev v-coturn
 $ipCMD1 route replace $DN42_ULA_ADDR/128 via fe80::2 dev v-coturn vrf vrf42
+
+echo "Successfully executed $(basename "$0")"
