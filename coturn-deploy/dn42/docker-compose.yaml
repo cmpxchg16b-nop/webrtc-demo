@@ -6,10 +6,11 @@ services:
     container_name: coturn-dn42
     restart: unless-stopped
     networks:
-      - dn42-net
+      - dn42-coturn-net
 
 networks:
-  dn42-net:
+  dn42-coturn-net:
+    name: "dn42-coturn-net"
     driver: bridge
     enable_ipv4: false
     enable_ipv6: true
