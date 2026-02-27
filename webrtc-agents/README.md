@@ -15,3 +15,27 @@ On macOS:
 ```sh
 brew install pkg-config opus opusfile
 ```
+
+### Build
+
+To build this multi-arch image, use the following commands from the `webrtc-demo` root directory:
+
+```bash
+# Create a builder instance (if not already created)
+docker buildx create --name mybuilder --use
+
+# Build and push multi-arch image
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --file webrtc-agents/Dockerfile \
+  --tag your-registry/webrtc-agents:latest \
+  --push \
+  .
+
+# Or build for local testing (single arch)
+docker buildx build \
+  --platform linux/amd64 \
+  --file webrtc-agents/Dockerfile \
+  --tag webrtc-agents:latest \
+  --load \
+  .
