@@ -23,7 +23,7 @@ NEXT_PUBLIC_ICE_SERVERS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:193
 
 **Example:**
 ```
-NEXT_PUBLIC_DN42_ICE_SERVERS=stun:stun.dn42.example.com:3478
+NEXT_PUBLIC_DN42_ICE_SERVERS=stun:stun.example.dn42:3478
 ```
 
 ## Notes
