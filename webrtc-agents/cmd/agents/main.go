@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pkghandlers "webrtc-agents/pkg/handlers"
+	pkgllm "webrtc-agents/pkg/llm"
 	pkgwsrunner "webrtc-agents/pkg/ws_runner"
 
 	"github.com/alecthomas/kong"
@@ -36,12 +37,6 @@ func main() {
 		log.Println("No .env file found or error loading .env file, continuing with existing environment variables")
 	}
 
-	// Read OpenRouter API key from environment variable if specified
-	var openrouterAPIKey string
-	if cli.OpenRouterAPIKeyEnv != "" {
-		openrouterAPIKey = os.Getenv(cli.OpenRouterAPIKeyEnv)
-	}
-
 	// Parse WebSocket URL
 	u, err := url.Parse(cli.WsServer)
 	if err != nil {
@@ -64,7 +59,6 @@ func main() {
 	}
 	go echoBotRunner.Run(ctx, echoBotHandler)
 	log.Println("Echo bot started!")
-	// <-time.After(1 * time.Second)
 
 	// MediaEngine Configuration:
 	// The handler creates a MediaEngine that registers only the Opus codec with the following parameters:
@@ -121,7 +115,6 @@ func main() {
 	}
 	go musicBotRunner.Run(ctx, musicBotHandler)
 	log.Println("Music bot started!")
-	// <-time.After(1 * time.Second)
 
 	var counterBotHandler pkghandlers.GenericWebRTCHandler
 	counterBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(pkghandlers.NewCounterDCHandler()), cli.ICEServer, cli.Debug, nil)
@@ -135,10 +128,9 @@ func main() {
 	}
 	go counterBotRunner.Run(ctx, counterBotHandler)
 	log.Println("Counter bot started!")
-	// <-time.After(1 * time.Second)
 
 	var clockBotHandler pkghandlers.GenericWebRTCHandler
-	clockBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(pkghandlers.NewClockBotDCHandler(openrouterAPIKey)), cli.ICEServer, cli.Debug, nil)
+	clockBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(pkghandlers.NewClockBotDCHandler()), cli.ICEServer, cli.Debug, nil)
 	clockBotRunner := &pkgwsrunner.WebSocketRunner{
 		URL:                   *u,
 		PingIntv:              cli.PingPeriod,
@@ -149,7 +141,23 @@ func main() {
 	}
 	go clockBotRunner.Run(ctx, clockBotHandler)
 	log.Println("Clock bot started!")
-	// <-time.After(1 * time.Second)
+
+	// ChatBot using OpenRouterCompletionProxy
+	var chatBotHandler pkghandlers.GenericWebRTCHandler
+	chatBotLLM := &pkgllm.OpenRouterCompletionProxy{
+		APIKeyFromEnv: cli.OpenRouterAPIKeyEnv,
+	}
+	chatBotHandler = pkghandlers.NewSignallingHandler(pkghandlers.WithPingHandler(pkghandlers.NewChatBotDCHandler(chatBotLLM)), cli.ICEServer, cli.Debug, nil)
+	chatBotRunner := &pkgwsrunner.WebSocketRunner{
+		URL:                   *u,
+		PingIntv:              cli.PingPeriod,
+		Debug:                 cli.Debug,
+		ReconnectOnDisconnect: cli.ReconnectOnDisconnect,
+		ReconnectDelay:        cli.ReconnectDelay,
+		NodeName:              "ChatBot",
+	}
+	go chatBotRunner.Run(ctx, chatBotHandler)
+	log.Println("Chat bot started!")
 
 	sigsCh := make(chan os.Signal, 1)
 	signal.Notify(sigsCh, syscall.SIGINT)

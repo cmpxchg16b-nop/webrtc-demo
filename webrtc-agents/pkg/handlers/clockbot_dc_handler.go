@@ -15,16 +15,12 @@ import (
 )
 
 type ClockBotDCHandler struct {
-	APIKey string
-
 	generalProperties sync.Map
 }
 
 // NewClockBotDCHandler creates a new ClockBotDCHandler
-func NewClockBotDCHandler(apiKey string) *ClockBotDCHandler {
-	return &ClockBotDCHandler{
-		APIKey: apiKey,
-	}
+func NewClockBotDCHandler() *ClockBotDCHandler {
+	return &ClockBotDCHandler{}
 }
 
 // Serve starts the WebRTC handler
