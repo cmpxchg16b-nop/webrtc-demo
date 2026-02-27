@@ -50,6 +50,7 @@ fi
 $ipCMD2 l set v-dn42 up
 $ipCMD2 a flush scope link dev v-dn42
 $ipCMD2 a add fe80::2/64 dev v-dn42
+$ipCMD2 a add $DN42_ULA_ADDR/128 dev v-dn42
 $ipCMD2 route replace fd00::/8 via fe80::1 dev v-dn42
 
 $ipCMD1 l set v-coturn vrf vrf42

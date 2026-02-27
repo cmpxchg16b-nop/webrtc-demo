@@ -1,0 +1,3 @@
+[submodule "coturn-deploy/coturn"]
+	path = coturn-deploy/coturn
+	url = https://github.com/coturn/coturn.git

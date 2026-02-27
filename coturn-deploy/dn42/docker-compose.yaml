@@ -1,10 +1,20 @@
 services:
   coturn:
-    image: coturn/coturn
-    container_name: coturn-dn42
+    image: mycoturn:latest
+    pull_policy: never
     restart: unless-stopped
+    container_name: coturn-dn42
     networks:
       - dn42-coturn-net
+    env_file: .env
+    volumes:
+      - "./docker-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh"
+    entrypoint: /usr/local/bin/docker-entrypoint.sh
+    cap_add:
+      - NET_ADMIN
+    user: root
+    command:
+      - "--log-file=stdout"
 
 networks:
   dn42-coturn-net:
