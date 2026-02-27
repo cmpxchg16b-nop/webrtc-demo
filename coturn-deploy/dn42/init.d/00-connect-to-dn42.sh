@@ -30,3 +30,19 @@ if [ -z "$pid2" ] || [ "$pid2" -eq 0 ] 2>/dev/null; then
     echo "Error: Failed to get PID for container '$CONTAINER_NAME'. Container may not exist or is not running."
     exit 1
 fi
+
+ip l add v-dn42 netns $pid2 type veth peer v-coturn netns $pid1 2>/dev/null
+
+ipCMD1="nsenter -t $pid1 -n ip"
+ipCMD2="nsenter -t $pid2 -n ip"
+
+$ipCMD2 l set v-dn42 up
+$ipCMD2 a flush scope link dev v-dn42
+$ipCMD2 a add fe80::2/64 dev v-dn42
+$ipCMD2 route add fd00::/8 via fe80::1 dev v-dn42
+
+$ipCMD1 l set v-coturn vrf vrf42
+$ipCMD1 l set v-coturn up
+$ipCMD1 a flush scope link dev v-coturn
+$ipCMD1 a add fe80::1/64 dev v-coturn
+$ipCMD1 route add $DN42_ULA_ADDR/128 via fe80::2 dev v-coturn vrf vrf42
