@@ -82,22 +82,25 @@ function sortSignallingServers(wsServers: WSServer[]): WSServer[] {
 export function getSignallingServers(): WSServer[] {
   const servers: WSServer[] = [
     {
-      url: appendWsPathToCurrentOrigin("/ws"),
+      url: appendWsPathToCurrentOrigin("/api/ws"),
       name: "Main",
       id: "main",
       iceServers: getICEServerURLs(),
+      apiPrefix: "/api",
     },
     {
       url: "ws://localhost:3001/ws",
       name: "Test Server",
       id: "test",
       iceServers: getICEServerURLs(),
+      apiPrefix: "http://localhost:3001",
     },
     {
-      url: appendWsPathToCurrentOrigin("/ws"),
+      url: appendWsPathToCurrentOrigin("/api/ws"),
       name: "DN42/NeoNetwork",
       id: "dn42",
       iceServers: getDN42ICEServerURLs(),
+      apiPrefix: "/api",
     },
   ];
   return sortSignallingServers(servers);

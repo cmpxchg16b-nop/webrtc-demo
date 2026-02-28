@@ -16,3 +16,5 @@ services:
     restart: unless-stopped
     networks:
       - dn42-webrtc-server
+    command:
+      - "--allowed-origin=https://chat.duststars.dn42"

@@ -317,4 +317,5 @@ export type WSServer = {
   name: string;
   id: string;
   iceServers: string[];
+  apiPrefix: string;
 };

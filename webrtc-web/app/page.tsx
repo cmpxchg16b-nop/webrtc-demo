@@ -107,18 +107,20 @@ function useWs(
   const pingTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [conns, setConns] = useState<ConnEntry[]>([]);
   const connTrackRef = useRef<ConnTrack>({});
+  const serverRef=useRef<WSServer|null>(null)
 
-  const doRefresh = () =>
-    getConns().then((conns) => {
+  const doRefresh = (apiPrefix: string) =>
+    getConns(apiPrefix).then((conns) => {
       setConns(conns);
     });
 
   const doConnect = (
-    addr: string,
+    server: WSServer,
     iceServers: string[],
     onUnread: (messageIds: string[]) => void,
     preference: Preference,
   ) => {
+    const addr = server.url;
     setConnecting(true);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
@@ -1796,7 +1798,10 @@ export default function Home() {
                   variant="standard"
                   value={preference.name}
                   onChange={(e) =>
-                    setPreference({ ...preference, name: e.target.value })
+                    setPreference({
+                      ...preference,
+                      name: e.target.value,
+                    })
                   }
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -1807,7 +1812,7 @@ export default function Home() {
                       );
                       if (server) {
                         doConnect(
-                          server.url,
+                          server,
                           server.iceServers,
                           addUnreadMessageIds,
                           preference,
@@ -1818,7 +1823,11 @@ export default function Home() {
                 />
               </Box>
               <Box
-                sx={{ display: "flex", justifyContent: "center", marginTop: 2 }}
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginTop: 2,
+                }}
               >
                 <Button
                   variant="contained"

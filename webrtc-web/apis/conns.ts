@@ -1,9 +1,7 @@
 import { ConnEntry, ConnRegistryData } from "./types";
 
-const apiEndpoint = "http://localhost:3001";
-
-export function getConns() {
-  return fetch(`${apiEndpoint}/conns`)
+export function getConns(apiPrefix: string) {
+  return fetch(`${apiPrefix}/conns`)
     .then((r) => r.json())
     .then((r) => r as Record<string, ConnRegistryData>)
     .then((r) => {
