@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 
 	"time"
 
@@ -59,27 +60,24 @@ func (runner *WebSocketRunner) getDialer() *websocket.Dialer {
 			return nil, err
 		}
 
-		// Filter for IPv6 only if PreferIPv6 is set
-		var filteredIPs []net.IP
-		if runner.PreferIPv6 {
-			for _, ip := range ips {
-				if ip.To4() == nil { // IPv6 address (not IPv4-mapped)
-					filteredIPs = append(filteredIPs, ip)
-				}
-			}
-		} else {
-			filteredIPs = ips
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("failed to resolve IP addresses for %s, network: %s", host, nwPreference)
 		}
 
 		// Try connecting to each resolved IP until one succeeds
 		var lastErr error
-		for _, ip := range filteredIPs {
-			ipAddr := net.JoinHostPort(ip.String(), port)
-			conn, err := (&net.Dialer{}).DialContext(ctx, network, ipAddr)
-			if err == nil {
-				return conn, nil
+		for _, ip := range ips {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				ipAddr := net.JoinHostPort(ip.String(), port)
+				conn, err := (&net.Dialer{}).DialContext(ctx, network, ipAddr)
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
 			}
-			lastErr = err
 		}
 
 		return nil, fmt.Errorf("failed to connect to %s: %v", addr, lastErr)
@@ -99,49 +97,61 @@ func (runner *WebSocketRunner) Run(ctx context.Context, handler pkghandlers.Gene
 	outputDataCh := make(chan pkgframing.MessagePayload)
 	go func(ctx context.Context) {
 		defer close(outputDataCh)
+		errLogger := log.New(os.Stderr, "", 0)
+
 		for {
 			log.Printf("Connecting to %s", u.String())
 
 			// Establish WebSocket connection
 
 			wsConn, _, err := runner.getDialer().Dial(u.String(), nil)
-			if err != nil {
-				log.Fatal("Failed to dial:", err)
+			if err == nil {
+				func(wsConn *websocket.Conn, ctx context.Context) {
+					defer wsConn.Close()
+					log.Printf("Dialed to ws server %+v", wsConn.RemoteAddr().String())
+
+					registerer := &WebSocketRegisterer{}
+					if err := registerer.Register(wsConn, runner.NodeName); err != nil {
+						errLogger.Println("Failed to send registration message:", err)
+						return
+					}
+
+					log.Printf("Sent registration message for node: %s", runner.NodeName)
+
+					wsPinger := &BasicWSMsgHandler{
+						Intv:  runner.PingIntv,
+						Debug: runner.Debug,
+					}
+					dataCh, errCh := wsPinger.startMessagesLoop(ctx, wsConn, txChannel)
+					log.Println("Ping/pong loop started")
+
+					go func() {
+						for item := range dataCh {
+							outputDataCh <- item
+						}
+					}()
+
+					err, ok := <-errCh
+					if ok && err != nil {
+						errLogger.Printf("Error on ws connection: %+v", err)
+						return
+					}
+				}(wsConn, ctx)
+			} else {
+				errLogger.Println("Failed to dial:", err)
 			}
-			defer wsConn.Close()
-			log.Printf("Dialed to ws server %+v", wsConn.RemoteAddr().String())
 
-			registerer := &WebSocketRegisterer{}
-			if err := registerer.Register(wsConn, runner.NodeName); err != nil {
-				log.Fatal("Failed to send registration message:", err)
-			}
-
-			log.Printf("Sent registration message for node: %s", runner.NodeName)
-
-			wsPinger := &BasicWSMsgHandler{
-				Intv:  runner.PingIntv,
-				Debug: runner.Debug,
-			}
-			dataCh, errCh := wsPinger.startMessagesLoop(ctx, wsConn, txChannel)
-			log.Println("Ping/pong loop started")
-
-			go func() {
-				for item := range dataCh {
-					outputDataCh <- item
-				}
-			}()
-
-			err, ok := <-errCh
-			if ok && err != nil {
-				log.Printf("Error on ws connection: %+v", err)
-				if !runner.ReconnectOnDisconnect {
-					return
-				}
-				break
+			if !runner.ReconnectOnDisconnect {
+				return
 			}
 
 			log.Printf("Reconnecting to %s in %s", u.String(), runner.ReconnectDelay.String())
-			<-time.After(runner.ReconnectDelay)
+			select {
+			case <-ctx.Done():
+				errLogger.Println("Reconnect cancelled (context cancelled):", ctx.Err())
+				return
+			case <-time.After(runner.ReconnectDelay):
+			}
 		}
 	}(ctx)
 
