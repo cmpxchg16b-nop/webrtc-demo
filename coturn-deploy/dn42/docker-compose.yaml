@@ -1,3 +1,4 @@
+name: dn42-webrtc-stun
 services:
   coturn:
     image: mycoturn:latest
