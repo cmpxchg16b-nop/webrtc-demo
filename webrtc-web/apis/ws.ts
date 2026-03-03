@@ -89,11 +89,11 @@ export function getSignallingServers(): WSServer[] {
       apiPrefix: "/api",
     },
     {
-      url: "ws://localhost:3001/ws",
+      url: appendWsPathToCurrentOrigin("/api/ws"),
       name: "Test Server",
       id: "test",
       iceServers: getDN42ICEServerURLs(),
-      apiPrefix: "http://localhost:3001",
+      apiPrefix: "/api",
     },
     {
       url: appendWsPathToCurrentOrigin("/api/ws"),
