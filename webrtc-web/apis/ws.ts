@@ -8,6 +8,10 @@ import { IAPKind, WSServer } from "./types";
  * @returns Full WebSocket URL
  */
 export function appendWsPathToCurrentOrigin(path: string = "/ws"): string {
+  if (path.startsWith("ws://") || path.startsWith("wss://")) {
+    return path;
+  }
+
   if (typeof window === "undefined") {
     return "";
   }
@@ -82,31 +86,31 @@ function sortSignallingServers(wsServers: WSServer[]): WSServer[] {
 export function getSignallingServers(): WSServer[] {
   const servers: WSServer[] = [
     {
-      url: appendWsPathToCurrentOrigin("/api/ws"),
+      url: "/api/ws",
       name: "Main",
       id: "main",
-      iceServers: getICEServerURLs(),
+      iceServers: ["stun:stun.l.google.com:19302"],
       apiPrefix: "/api",
     },
     {
-      url: appendWsPathToCurrentOrigin("/api/ws"),
+      url: "/api/ws",
       name: "Test Server",
       id: "test",
-      iceServers: getDN42ICEServerURLs(),
+      iceServers: ["stun:webrtc-stun.duststars.dn42:3478"],
       apiPrefix: "/api",
     },
     {
-      url: appendWsPathToCurrentOrigin("/api/ws"),
+      url: "/api/ws",
       name: "DN42/NeoNetwork",
       id: "dn42",
-      iceServers: getDN42ICEServerURLs(),
+      iceServers: ["stun:webrtc-stun.duststars.dn42:3478"],
       apiPrefix: "/api",
     },
     {
-      url: appendWsPathToCurrentOrigin("/api/ws"),
+      url: "/api/ws",
       name: "Test Server (Mock IAP)",
       id: "mock-iap",
-      iceServers: getICEServerURLs(),
+      iceServers: ["stun:webrtc-stun.duststars.dn42:3478"],
       apiPrefix: "/api",
       iap: {
         name: "mock-iap",

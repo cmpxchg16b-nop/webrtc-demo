@@ -65,7 +65,7 @@ import { useUnreads } from "@/apis/unreads";
 import { useScrollTop } from "@/apis/scrollTop";
 import { unmarshalMessagePatchOrder } from "@/apis/message_patch";
 import { getICEServerURLs } from "@/apis/ice";
-import { getSignallingServers } from "@/apis/ws";
+import { appendWsPathToCurrentOrigin, getSignallingServers } from "@/apis/ws";
 import { ServerSelector } from "@/components/ServerSelector";
 import { useFileDrop } from "@/components/useFileDrop";
 import {
@@ -125,11 +125,12 @@ function useWs(
 
   const doConnect = (
     server: WSServer,
-    iceServers: string[],
     onUnread: (messageIds: string[]) => void,
     preference: Preference,
   ) => {
-    const addr = server.url;
+    const addr = appendWsPathToCurrentOrigin(server.url);
+    const iceServers = server.iceServers;
+
     setConnecting(true);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
@@ -1844,12 +1845,7 @@ export default function Home() {
             <ServerSelector
               connecting={connecting}
               onConnect={(server) => {
-                doConnect(
-                  server,
-                  server.iceServers,
-                  addUnreadMessageIds,
-                  preference,
-                );
+                doConnect(server, addUnreadMessageIds, preference);
               }}
               preferName={preference.name}
               onPreferNameChange={(n) => {
