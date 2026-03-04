@@ -68,7 +68,7 @@ func (h *LoginHandler) getGithubOAuthScope() string {
 		return h.GithubOAuthScope
 	}
 	scopes := []string{"read:user"}
-	return strings.Join(scopes, ",")
+	return strings.Join(scopes, " ")
 }
 
 func (h *LoginHandler) getNonceLifespan() time.Duration {
