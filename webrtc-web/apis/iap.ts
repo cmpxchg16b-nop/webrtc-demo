@@ -1,7 +1,26 @@
+import { getColorTokenHashFromUsername, PRESET_COLORS } from "./colors";
 import { DataURL, IAPKind } from "./types";
 
 export interface IAPOperator {
   getAvatar(username: string): Promise<DataURL>;
+}
+
+function getDataURLFromBlob(blob: Blob): Promise<DataURL> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as DataURL);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function paintFirstLetterAvatar(username: string): DataURL {
+  const colorTokenIdx = getColorTokenHashFromUsername(username);
+  const colorToken = PRESET_COLORS[colorTokenIdx % PRESET_COLORS.length];
+  const bgColor = colorToken.dark;
+  const fgColor = "#fff";
+  const canvasW = 450;
+  const canvasH = 450;
 }
 
 export function mockIAPOperator(): IAPOperator {
@@ -11,14 +30,14 @@ export function mockIAPOperator(): IAPOperator {
         `https://avatars.githubusercontent.com/${username}`,
       );
 
-      const blob = await response.blob();
-
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as DataURL);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      try {
+        const blob = await response.blob();
+        const dataURL = await getDataURLFromBlob(blob);
+        return dataURL;
+      } catch (err) {
+        console.error("failed to get avatar DataURL, falling back to default");
+        return paintFirstLetterAvatar(username);
+      }
     },
   };
 }

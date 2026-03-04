@@ -11,25 +11,8 @@ import {
   Typography,
 } from "@mui/material";
 import { Preference } from "@/apis/types";
+import { ColorToken, PRESET_COLORS } from "@/apis/colors";
 import { Dispatch, SetStateAction, useState } from "react";
-
-type ColorToken = {
-  light: string;
-  dark: string;
-};
-
-export const PRESET_COLORS: ColorToken[] = [
-  { light: "#EF9A9A", dark: "#F44336" }, // Red
-  { light: "#F48FB1", dark: "#E91E63" }, // Pink
-  { light: "#CE93D8", dark: "#9C27B0" }, // Purple
-  { light: "#B39DDB", dark: "#673AB7" }, // Deep Purple
-  { light: "#9FA8DA", dark: "#3F51B5" }, // Indigo
-  { light: "#90CAF9", dark: "#2196F3" }, // Blue
-  { light: "#80DEEA", dark: "#00BCD4" }, // Cyan
-  { light: "#80CBC4", dark: "#009688" }, // Teal
-  { light: "#A5D6A7", dark: "#4CAF50" }, // Green
-  { light: "#FFCC80", dark: "#FF9800" }, // Orange
-];
 
 function roundN(i: number, N: number): number {
   return (i + N) % N;
