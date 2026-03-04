@@ -1,8 +1,4 @@
-import {
-  getColorTokenHashFromUsername,
-  paintFirstLetterAvatar,
-  PRESET_COLORS,
-} from "./colors";
+import { paintFirstLetterAvatar, PRESET_COLORS } from "./colors";
 import { DataURL, IAPKind } from "./types";
 
 export interface IAPOperator {

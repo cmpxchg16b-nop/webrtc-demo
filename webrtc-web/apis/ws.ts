@@ -104,7 +104,7 @@ export function getSignallingServers(): WSServer[] {
     },
     {
       url: appendWsPathToCurrentOrigin("/api/ws"),
-      name: "Mock IAP Server",
+      name: "Test Server (Mock IAP)",
       id: "mock-iap",
       iceServers: getICEServerURLs(),
       apiPrefix: "/api",
