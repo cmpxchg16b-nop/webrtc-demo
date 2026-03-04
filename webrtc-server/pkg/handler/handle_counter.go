@@ -11,28 +11,27 @@ type CounterHandler struct {
 	state sync.Map
 }
 
+// returns the pre-increment value
 func (cnt *CounterHandler) increaseCnt(key string) int {
 	// use a compare-and-swap loop to handle concurrent updates
 	currentVal := 0
 	for {
 		// CompareAndSwap failed, re-read the current value and retry
-		if v, ok := cnt.state.Load(key); ok {
+		if v, loaded := cnt.state.LoadOrStore(key, currentVal); loaded {
 			currentVal = v.(int)
-		} else {
-			currentVal = 0
-			cnt.state.Store(key, currentVal)
 		}
 
 		if cnt.state.CompareAndSwap(key, currentVal, currentVal+1) {
 			break
 		}
-
 	}
 
 	return currentVal
 }
 
 func (cnt *CounterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	ctx := r.Context()
 	sessionId := ctx.Value(CtxSessionKeySessionId)
 	if sessionId == nil {
