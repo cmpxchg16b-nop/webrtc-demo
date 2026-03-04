@@ -1,3 +1,5 @@
+import { DataURL } from "./types";
+
 export type ColorToken = {
   light: string;
   dark: string;
@@ -24,4 +26,36 @@ export function getColorTokenHashFromUsername(username: string): number {
     hash = hash & hash; // Convert to 32bit integer
   }
   return Math.abs(hash) % PRESET_COLORS.length;
+}
+
+export function paintFirstLetterAvatar(username: string): DataURL {
+  const colorTokenIdx = getColorTokenHashFromUsername(username);
+  const colorToken = PRESET_COLORS[colorTokenIdx % PRESET_COLORS.length];
+  const bgColor = colorToken.dark;
+  const fgColor = "#fff";
+  const canvasW = 450;
+  const canvasH = 450;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Failed to get 2d context");
+  }
+
+  // Draw background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Draw the first letter
+  const firstLetter = username.charAt(0).toUpperCase();
+  ctx.fillStyle = fgColor;
+  ctx.font = `${canvasW * 0.6}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(firstLetter, canvasW / 2, canvasH / 2);
+
+  return canvas.toDataURL() as DataURL;
 }

@@ -1,4 +1,8 @@
-import { getColorTokenHashFromUsername, PRESET_COLORS } from "./colors";
+import {
+  getColorTokenHashFromUsername,
+  paintFirstLetterAvatar,
+  PRESET_COLORS,
+} from "./colors";
 import { DataURL, IAPKind } from "./types";
 
 export interface IAPOperator {
@@ -12,15 +16,6 @@ function getDataURLFromBlob(blob: Blob): Promise<DataURL> {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
-}
-
-function paintFirstLetterAvatar(username: string): DataURL {
-  const colorTokenIdx = getColorTokenHashFromUsername(username);
-  const colorToken = PRESET_COLORS[colorTokenIdx % PRESET_COLORS.length];
-  const bgColor = colorToken.dark;
-  const fgColor = "#fff";
-  const canvasW = 450;
-  const canvasH = 450;
 }
 
 export function mockIAPOperator(): IAPOperator {
