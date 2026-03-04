@@ -74,6 +74,7 @@ import {
   PingRTTSample,
   setupWsPing,
 } from "@/apis/ping";
+import { PSKey, usePersistentStorage } from "@/apis/persistent";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -1597,10 +1598,10 @@ export default function Home() {
 
   const userPreferenceMap = getUserPreferenceMap(conns ?? []);
   const servers: WSServer[] = getSignallingServers();
-  // console.debug("[dbg] servers:", servers);
-  const [selectedServer, setSelectedServer] = useState<string>(
-    servers?.[0].id ?? "",
-  );
+  const { getValue: getCurrentServer, setValue: setSelectedServer } =
+    usePersistentStorage(PSKey.CurrentServer);
+  const selectedServer = getCurrentServer() || (servers?.[0].id ?? "");
+
   const [searchKw, setSearchKw] = useState<string>("");
 
   const msgsBoxRef = useRef<HTMLDivElement>(null);

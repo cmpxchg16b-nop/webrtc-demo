@@ -23,6 +23,27 @@ export function ServerSelector(props: {
     onPreferNameChange,
     connecting,
   } = props;
+
+  const selectedServerObj = servers.find(
+    (server) => server.id === selectedServer,
+  );
+  const hasIAP = selectedServerObj?.iap && selectedServerObj.iap.loginUrl;
+
+  const handleLoginClick = () => {
+    if (hasIAP && selectedServerObj?.iap?.loginUrl) {
+      window.location.href = selectedServerObj.iap.loginUrl;
+    }
+  };
+
+  const getDisplayName = () => {
+    if (!selectedServerObj?.iap) return "Connect";
+    const displayName = selectedServerObj.iap.displayName;
+    if (typeof displayName === "string") {
+      return displayName;
+    }
+    return displayName.en_US;
+  };
+
   return (
     <Box
       sx={{
@@ -55,25 +76,29 @@ export function ServerSelector(props: {
             </MenuItem>
           ))}
         </Select>
-        <Box sx={{ justifySelf: "right" }}>Pick a Name:</Box>
-        <TextField
-          fullWidth
-          variant="standard"
-          value={preferName}
-          onChange={(e) => onPreferNameChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              e.stopPropagation();
-              const server = servers.find(
-                (server) => server.id === selectedServer,
-              );
-              if (server) {
-                onConnect(server);
-              }
-            }
-          }}
-        />
+        {!hasIAP && (
+          <>
+            <Box sx={{ justifySelf: "right" }}>Pick a Name:</Box>
+            <TextField
+              fullWidth
+              variant="standard"
+              value={preferName}
+              onChange={(e) => onPreferNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const server = servers.find(
+                    (server) => server.id === selectedServer,
+                  );
+                  if (server) {
+                    onConnect(server);
+                  }
+                }
+              }}
+            />
+          </>
+        )}
       </Box>
       <Box
         sx={{
@@ -82,20 +107,38 @@ export function ServerSelector(props: {
           marginTop: 2,
         }}
       >
-        <Button
-          variant="contained"
-          loading={connecting}
-          onClick={() => {
-            const server = servers.find(
-              (server) => server.id === selectedServer,
-            );
-            if (server) {
-              onConnect(server);
+        {hasIAP ? (
+          <Button
+            variant="contained"
+            onClick={handleLoginClick}
+            startIcon={
+              selectedServerObj?.iap?.loginButtonIconDataURL ? (
+                <img
+                  src={selectedServerObj.iap.loginButtonIconDataURL}
+                  alt="login icon"
+                  style={{ width: 24, height: 24 }}
+                />
+              ) : undefined
             }
-          }}
-        >
-          Connect
-        </Button>
+          >
+            {getDisplayName()}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            loading={connecting}
+            onClick={() => {
+              const server = servers.find(
+                (server) => server.id === selectedServer,
+              );
+              if (server) {
+                onConnect(server);
+              }
+            }}
+          >
+            Connect
+          </Button>
+        )}
       </Box>
     </Box>
   );
