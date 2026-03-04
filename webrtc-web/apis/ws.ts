@@ -1,5 +1,5 @@
 import { getDN42ICEServerURLs, getICEServerURLs } from "./ice";
-import { WSServer } from "./types";
+import { IAPKind, WSServer } from "./types";
 
 /**
  * Build a WebSocket URL from the current origin by appending the given path.
@@ -101,6 +101,21 @@ export function getSignallingServers(): WSServer[] {
       id: "dn42",
       iceServers: getDN42ICEServerURLs(),
       apiPrefix: "/api",
+    },
+    {
+      url: appendWsPathToCurrentOrigin("/api/ws"),
+      name: "Mock IAP Server",
+      id: "mock-iap",
+      iceServers: getICEServerURLs(),
+      apiPrefix: "/api",
+      iap: {
+        name: "mock-iap",
+        kind: IAPKind.MockIAP,
+        displayName: "Login with Mock IAP",
+        loginUrl: "https://mock-iap.example.com/login",
+        loginButtonIconDataURL:
+          "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMTIgMkM2LjQ4IDIgMiA2LjQ4IDIgMTJzNC40OCAxMCAxMCAxMCAxMC00LjQ4IDEwLTEwUzE3LjUyIDIgMTIgMnoiLz48L3N2Zz4=",
+      },
     },
   ];
   return sortSignallingServers(servers);

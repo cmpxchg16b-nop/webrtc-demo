@@ -319,9 +319,21 @@ export type MultiLanguageText = {
   en_US: string;
 };
 
+export enum IAPKind {
+  MockIAP = "mock-iap",
+}
+
+// see https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/data
+// format: data:[<media-type>][;base64],<data>
+// MIME type can be encoded in the DataURL string.
+export type DataURL = string;
+
 export type IDProvider = {
   // Identifier of the IA provider, must be unique among all providers
   name: string;
+
+  // Kind determines the way the user interact with the IAP.
+  kind: IAPKind;
 
   // the Text displayed on the login button
   // For now, only `displayName` of `string` type is supported
@@ -331,10 +343,7 @@ export type IDProvider = {
   // The page which the user should be redirected to when they click the login button.
   loginUrl: string;
 
-  // see https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/data
-  // format: data:[<media-type>][;base64],<data>
-  // MIME type can be encoded in the DataURL string.
-  loginButtonIconDataURL: string;
+  loginButtonIconDataURL: DataURL;
 };
 
 export type WSServer = {
