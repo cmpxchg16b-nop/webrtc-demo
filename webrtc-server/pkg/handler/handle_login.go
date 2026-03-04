@@ -33,8 +33,11 @@ type NonceState struct {
 }
 
 type LoginHandler struct {
-	nonceMap             sync.Map
-	NonceLifespan        time.Duration
+	nonceMap sync.Map
+
+	// If this is empty, we would use default value for it.
+	NonceLifespan time.Duration
+
 	GithubOAuthClientId  string
 	GithubOAuthAppSecret []byte
 	GithubOAuthRedirURL  string
