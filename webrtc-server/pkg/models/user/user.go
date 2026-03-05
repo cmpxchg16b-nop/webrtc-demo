@@ -2,9 +2,9 @@ package user
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"sync/atomic"
-
-	"github.com/google/uuid"
 )
 
 type User struct {
@@ -31,6 +31,7 @@ type UserManager interface {
 type InMemoryUserStore struct {
 	Revision int
 	Users    []User
+	Index    map[string]int
 }
 
 func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
@@ -39,8 +40,11 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 		*newStore = *store
 		newStore.Revision += 1
 		newStore.Users = make([]User, len(store.Users))
+		newStore.Index = make(map[string]int)
 		for i := range store.Users {
-			newStore.Users[i] = *store.Users[i].Clone()
+			u := store.Users[i]
+			newStore.Users[i] = *u.Clone()
+			newStore.Index[u.Id] = i
 		}
 	}
 	return newStore
@@ -48,7 +52,11 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 
 func (store *InMemoryUserStore) AddUser(user User) *InMemoryUserStore {
 	newStore := store.Clone()
-	newStore.Users = append(newStore.Users, user)
+
+	// NOTE: each thread modififies the clone, not the same memory region
+	newUsers := append(newStore.Users, user)
+	newStore.Index[user.Id] = len(newUsers)
+	newStore.Users = newUsers
 	return newStore
 }
 
@@ -56,19 +64,17 @@ type MemoryUserManager struct {
 	store atomic.Pointer[InMemoryUserStore]
 }
 
-func (memUserMngr *MemoryUserManager) doAddUser(user User) {
+// Returns true means new user is created
+func (memUserMngr *MemoryUserManager) doAddUser(user User) (*User, bool) {
 	for {
 		oldStore := memUserMngr.store.Load()
+		if idx, hit := oldStore.Index[user.Id]; hit {
+			return &oldStore.Users[idx], false
+		}
 		if memUserMngr.store.CompareAndSwap(oldStore, oldStore.AddUser(user)) {
-			break
+			return &user, true
 		}
 	}
-}
-
-func (memUserMngr *MemoryUserManager) doCreateUser(user User) User {
-	user.Id = uuid.NewString()
-	memUserMngr.doAddUser(user)
-	return user
 }
 
 func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (User, bool, error) {
@@ -77,7 +83,10 @@ func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.
 		return *user, false, nil
 	}
 
-	return memUserMngr.doCreateUser(newUser), true, nil
+	hashedId := sha256.Sum256([]byte(fmt.Sprintf("Github-%s", githubId)))
+	newUser.Id = string(hashedId[:])
+	u, accepted := memUserMngr.doAddUser(newUser)
+	return *u, accepted, nil
 }
 
 func (memUserMngr *MemoryUserManager) GetUserById(ctx context.Context, userId string) (*User, error) {
