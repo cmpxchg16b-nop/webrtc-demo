@@ -7,4 +7,5 @@
 go run ./main.go \
   --allowed-origin=http://localhost:3000 \
   --github-login-redir-url=http://localhost:3000/api/login/auth \
+  --login-success-redir-url=http://localhost:3000/ \
   --debug=true

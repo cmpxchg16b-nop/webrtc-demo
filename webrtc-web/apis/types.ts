@@ -323,6 +323,8 @@ export enum IAPKind {
   MockIAP = "mock-iap",
 }
 
+export type IAPParameters = Record<string, string>;
+
 // see https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/data
 // format: data:[<media-type>][;base64],<data>
 // MIME type can be encoded in the DataURL string.
@@ -344,6 +346,8 @@ export type IDProvider = {
   loginUrl: string;
 
   loginButtonIconDataURL: DataURL;
+
+  parameters?: IAPParameters;
 };
 
 export type WSServer = {

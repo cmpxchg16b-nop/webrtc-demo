@@ -42,6 +42,8 @@ type LoginHandler struct {
 	// If this is empty, we would use default value (see github docs) for it.
 	GithubOAuthTokenEndpoint string
 	GithubLoginManager       pkggithub.GithubLoginManager
+
+	LoginSuccessRedirectURL string
 }
 
 func (h *LoginHandler) getGithubLoginPage() string {
@@ -221,6 +223,21 @@ func (h *LoginHandler) handleAuthorizationCode(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if u := h.LoginSuccessRedirectURL; u != "" {
+		log.Printf("User %s has been successfully logged in, redirecting to %s", sessionId.(string), u)
+		http.Redirect(w, r, u, http.StatusTemporaryRedirect)
+		return
+	}
+
+	if originURL, err := url.Parse(r.URL.String()); err != nil && originURL != nil {
+		originURL.RawFragment = ""
+		originURL.RawQuery = ""
+		originURL.RawPath = "/"
+		log.Printf("User %s has been successfully logged in, redirecting to %s", sessionId.(string), originURL.String())
+		http.Redirect(w, r, originURL.String(), http.StatusTemporaryRedirect)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -240,7 +257,7 @@ func (h *LoginHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		req.SetBasicAuth(h.GithubOAuthClientId, h.GithubOAuthAppSecret)
 		req.Header.Set("Accept", "application/vnd.github+json")
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
+		if err != nil || (resp != nil && resp.StatusCode >= 400) {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(&ErrResponse{Err: "Failed to revoke Github access_token"})
 			return

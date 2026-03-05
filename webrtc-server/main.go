@@ -27,6 +27,7 @@ type CLI struct {
 	InjectAllowAllCorsHeaders bool          `name:"inject-allow-all-cors-headers" help:"Inject CORS headers that allow all origins (for debugging purposes)"`
 	GithubLoginRedirectURL    string        `name:"github-login-redir-url" help:"The redirect_uri parameter that will be pass to Github OAuth login API" default:"http://localhost:3000/api/login/auth"`
 	Debug                     bool          `name:"debug" help:"Toggle this to make it print extra verbose logs in stdout" default:"false"`
+	LoginSuccessRedirectURL   string        `name:"login-success-redir-url" help:"The page to which the user will be redirect to once oauth login is successful"`
 }
 
 var cli CLI
@@ -82,10 +83,11 @@ func main() {
 	}
 
 	loginHandler := &pkghandler.LoginHandler{
-		GithubOAuthClientId:  gh_cli_id,
-		GithubOAuthAppSecret: gh_cli_sec,
-		GithubOAuthRedirURL:  cli.GithubLoginRedirectURL,
-		GithubLoginManager:   ghTokenManager,
+		GithubOAuthClientId:     gh_cli_id,
+		GithubOAuthAppSecret:    gh_cli_sec,
+		GithubOAuthRedirURL:     cli.GithubLoginRedirectURL,
+		GithubLoginManager:      ghTokenManager,
+		LoginSuccessRedirectURL: cli.LoginSuccessRedirectURL,
 	}
 	mux.Handle("/login/", loginHandler)
 

@@ -2,6 +2,7 @@
 
 import { WSServer } from "@/apis/types";
 import { Box, TextField, Select, MenuItem, Button } from "@mui/material";
+import { IaPLoginButton } from "./LoginButton";
 
 // Select what signalling server to use
 
@@ -108,21 +109,11 @@ export function ServerSelector(props: {
         }}
       >
         {hasIAP ? (
-          <Button
-            variant="contained"
+          <IaPLoginButton
             onClick={handleLoginClick}
-            startIcon={
-              selectedServerObj?.iap?.loginButtonIconDataURL ? (
-                <img
-                  src={selectedServerObj.iap.loginButtonIconDataURL}
-                  alt="login icon"
-                  style={{ width: 24, height: 24 }}
-                />
-              ) : undefined
-            }
-          >
-            {getDisplayName()}
-          </Button>
+            iapContext={selectedServerObj!.iap!}
+            loading={connecting}
+          />
         ) : (
           <Button
             variant="contained"
