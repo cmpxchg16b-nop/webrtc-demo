@@ -10,6 +10,8 @@ import (
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkggithub "example.com/webrtcserver/pkg/github"
 	pkghandler "example.com/webrtcserver/pkg/handler"
+	pkglogin "example.com/webrtcserver/pkg/models/login"
+	pkguser "example.com/webrtcserver/pkg/models/user"
 	pkgsafemap "example.com/webrtcserver/pkg/safemap"
 	pkgsession "example.com/webrtcserver/pkg/session"
 
@@ -82,19 +84,25 @@ func main() {
 		Debug: cli.Debug,
 	}
 
-	loginHandler := &pkghandler.GithubOAuthLoginHandler{
+	// initiate UserManager and UserSessionManager, and
+	// inject them to where is needed
+	userMgr := &pkguser.MemoryUserManager{}
+	userSessionMgr := &pkglogin.MemoryUserSessionManager{}
+
+	mux.Handle("/login/", &pkghandler.GithubOAuthLoginHandler{
 		GithubOAuthClientId:     gh_cli_id,
 		GithubOAuthAppSecret:    gh_cli_sec,
 		GithubOAuthRedirURL:     cli.GithubLoginRedirectURL,
 		GithubLoginManager:      ghTokenManager,
 		LoginSuccessRedirectURL: cli.LoginSuccessRedirectURL,
-	}
-	mux.Handle("/login/", loginHandler)
+		UserManager:             userMgr,
+		UserSessionManager:      userSessionMgr,
+	})
 
-	profileHandler := &pkghandler.ProfileHandler{
-		GithubTokenRetriever: ghTokenManager,
-	}
-	mux.Handle("/profile", profileHandler)
+	mux.Handle("/profile", &pkghandler.ProfileHandler{
+		UserManager:        userMgr,
+		UserSessionManager: userSessionMgr,
+	})
 
 	sessMngr := &pkgsession.CookieSessionManager{}
 	server := &http.Server{
