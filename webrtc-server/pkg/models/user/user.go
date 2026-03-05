@@ -39,11 +39,11 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 	// Each new Store would be private to current goroutine, so
 	// there will NEVER be a concurrent write!
 	newStore := new(InMemoryUserStore)
+	newStore.IndexById = make(map[string]int)
 	if store != nil {
 		*newStore = *store
 		newStore.Revision += 1
 		newStore.Users = make([]User, len(store.Users))
-		newStore.IndexById = make(map[string]int)
 		for i := range store.Users {
 			u := store.Users[i]
 			newStore.Users[i] = *u.Clone()
@@ -71,8 +71,10 @@ type MemoryUserManager struct {
 func (memUserMngr *MemoryUserManager) doAddUser(user User) (*User, bool) {
 	for {
 		oldStore := memUserMngr.store.Load()
-		if idx, hit := oldStore.IndexById[user.Id]; hit {
-			return &oldStore.Users[idx], false
+		if oldStore != nil {
+			if idx, hit := oldStore.IndexById[user.Id]; hit {
+				return oldStore.Users[idx].Clone(), false
+			}
 		}
 		if memUserMngr.store.CompareAndSwap(oldStore, oldStore.AddUser(user)) {
 			return &user, true
@@ -91,9 +93,6 @@ func (memUserMngr *MemoryUserManager) getIdFromGithubId(githubId string) string 
 func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (User, bool, error) {
 
 	newUser.Id = memUserMngr.getIdFromGithubId(githubId)
-	if user, _ := memUserMngr.GetUserById(ctx, newUser.Id); user != nil {
-		return *user, false, nil
-	}
 
 	// deterministic ID generation: if two goroutines are trying to register two users that has same github id,
 	// they would be treated as the same user, one attempty of them will success, another one will failed, the failed goroutine
