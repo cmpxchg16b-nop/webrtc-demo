@@ -92,7 +92,25 @@ type ProfileAvatarHandler struct {
 
 func (h *ProfileAvatarHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
 	ctx := r.Context()
+
+	if specifiedUsername := r.URL.Query().Get(QueryParamUsername); specifiedUsername != "" {
+		userObj, err := h.UserManager.GetUserByUsername(ctx, specifiedUsername)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(&ErrResponse{Err: "Can't access internal user store"})
+			return
+		}
+		if userObj == nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(&ErrResponse{Err: "User is not found"})
+			return
+		}
+		h.serveUserAvatar(w, userObj)
+		return
+	}
+
 	sessId := ctx.Value(CtxSessionKeySessionId)
 	if sessId == nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -120,6 +138,10 @@ func (h *ProfileAvatarHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.serveUserAvatar(w, userObj)
+}
+
+func (h *ProfileAvatarHandler) serveUserAvatar(w http.ResponseWriter, userObj *pkguser.User) {
 	if userObj == nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(&ErrResponse{Err: "User didn't found"})

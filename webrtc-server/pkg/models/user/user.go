@@ -21,12 +21,23 @@ type UserManager interface {
 	LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (User, bool, error)
 
 	GetUserById(ctx context.Context, userId string) (*User, error)
+
+	GetUserByUsername(ctx context.Context, username string) (*User, error)
 }
 
 type InMemoryUserStore struct {
 	Users           []User
 	IndexById       map[string]int
 	IndexByGithubId map[string]int
+	IndexByUsername map[string]int
+}
+
+// Only call this after indexes were cloned, make sure you are modifying a memory region that
+// is private to current goroutine
+func (newStore *InMemoryUserStore) updateIndex(u *User, i int) {
+	newStore.IndexById[u.Id] = i
+	newStore.IndexByGithubId[u.GithubId] = i
+	newStore.IndexByUsername[u.Username] = i
 }
 
 func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
@@ -35,16 +46,14 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 	newStore := new(InMemoryUserStore)
 	newStore.IndexById = make(map[string]int)
 	newStore.IndexByGithubId = make(map[string]int)
+	newStore.IndexByUsername = make(map[string]int)
 	if store != nil {
 		*newStore = *store
 		newStore.Users = make([]User, len(store.Users))
 		for i := range store.Users {
 			u := store.Users[i]
 			newStore.Users[i] = u
-			newStore.IndexById[u.Id] = i
-			if ghId := u.GithubId; ghId != "" {
-				newStore.IndexByGithubId[u.GithubId] = i
-			}
+			newStore.updateIndex(&u, i)
 		}
 	}
 	return newStore
@@ -55,7 +64,8 @@ func (store *InMemoryUserStore) AddUser(user User) *InMemoryUserStore {
 
 	// NOTE: after Clone(), each thread modififies the clone of its own, not the same memory region
 
-	newStore.IndexById[user.Id] = len(newStore.Users)
+	numId := len(newStore.Users)
+	store.updateIndex(&user, numId)
 	newStore.Users = append(newStore.Users, user)
 	return newStore
 }
@@ -92,6 +102,15 @@ func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.
 func (memUserMngr *MemoryUserManager) GetUserById(ctx context.Context, userId string) (*User, error) {
 	if store := memUserMngr.store.Load(); store != nil {
 		if idx, hit := store.IndexById[userId]; hit {
+			return &store.Users[idx], nil
+		}
+	}
+	return nil, nil
+}
+
+func (memUserMngr *MemoryUserManager) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	if store := memUserMngr.store.Load(); store != nil {
+		if idx, hit := store.IndexByUsername[username]; hit {
 			return &store.Users[idx], nil
 		}
 	}

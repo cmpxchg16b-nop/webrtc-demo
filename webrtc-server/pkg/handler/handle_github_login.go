@@ -19,8 +19,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const QueryParamCurrentPage string = "current_page"
-
 type GithubOAuthLoginNonceState struct {
 	SessionId   string
 	CurrentPage string
