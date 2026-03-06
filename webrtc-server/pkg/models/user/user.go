@@ -2,10 +2,9 @@ package user
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 // `User`s are immutable, no one should modify a `User` returned from a `UserManager`.
@@ -25,8 +24,9 @@ type UserManager interface {
 }
 
 type InMemoryUserStore struct {
-	Users     []User
-	IndexById map[string]int
+	Users           []User
+	IndexById       map[string]int
+	IndexByGithubId map[string]int
 }
 
 func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
@@ -34,6 +34,7 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 	// there will NEVER be a concurrent write!
 	newStore := new(InMemoryUserStore)
 	newStore.IndexById = make(map[string]int)
+	newStore.IndexByGithubId = make(map[string]int)
 	if store != nil {
 		*newStore = *store
 		newStore.Users = make([]User, len(store.Users))
@@ -41,6 +42,9 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 			u := store.Users[i]
 			newStore.Users[i] = u
 			newStore.IndexById[u.Id] = i
+			if ghId := u.GithubId; ghId != "" {
+				newStore.IndexByGithubId[u.GithubId] = i
+			}
 		}
 	}
 	return newStore
@@ -61,11 +65,11 @@ type MemoryUserManager struct {
 }
 
 // Returns true means new user is created
-func (memUserMngr *MemoryUserManager) doAddUser(user User) (*User, bool) {
+func (memUserMngr *MemoryUserManager) doAddUserByGithubId(user User) (*User, bool) {
 	for {
 		oldStore := memUserMngr.store.Load()
 		if oldStore != nil {
-			if idx, hit := oldStore.IndexById[user.Id]; hit {
+			if idx, hit := oldStore.IndexByGithubId[user.GithubId]; hit {
 				return &oldStore.Users[idx], false
 			}
 		}
@@ -75,23 +79,13 @@ func (memUserMngr *MemoryUserManager) doAddUser(user User) (*User, bool) {
 	}
 }
 
-func (memUserMngr *MemoryUserManager) getIdFromGithubId(githubId string) string {
-	// deterministic ID generation: if two goroutines are trying to register two users that has same github id,
-	// they would be treated as the same user, one attempty of them will success, another one will failed, the failed goroutine
-	// will fetch the already created user instead of override the previously created one.
-	hashBin := sha256.Sum256([]byte(fmt.Sprintf("Github-%s", githubId)))
-	return hex.EncodeToString(hashBin[:])
-}
-
 func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (User, bool, error) {
 
-	newUser.Id = memUserMngr.getIdFromGithubId(githubId)
+	if id := newUser.Id; id == "" {
+		newUser.Id = uuid.NewString()
+	}
 
-	// deterministic ID generation: if two goroutines are trying to register two users that has same github id,
-	// they would be treated as the same user, one attempty of them will success, another one will failed, the failed goroutine
-	// will fetch the already created user instead of override the previously created one.
-
-	u, accepted := memUserMngr.doAddUser(newUser)
+	u, accepted := memUserMngr.doAddUserByGithubId(newUser)
 	return *u, accepted, nil
 }
 
