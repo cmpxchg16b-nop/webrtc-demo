@@ -38,7 +38,7 @@ export function ServerSelector(props: {
 
     // navigate the user to the oauth2 authorization portal
     if (hasIAP && selectedServerObj?.iap?.loginUrl) {
-      window.open(selectedServerObj.iap.loginUrl);
+      window.location.href = selectedServerObj.iap.loginUrl;
     }
   };
 
