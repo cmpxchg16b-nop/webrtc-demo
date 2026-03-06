@@ -54,7 +54,7 @@ export function useLoginStatusPolling(apiPrefix: string, intervalMs: number) {
     };
   }, [apiPrefix, intervalMs]);
 
-  let hintText = "Please authorize on the OAuth portal";
+  let hintText = "Waiting for authorization ...";
   if (!!loggedIn) {
     hintText = "You are logged in, fetching profile ...";
     if (!!loggedInAs) {

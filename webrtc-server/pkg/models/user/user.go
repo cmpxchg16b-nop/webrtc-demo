@@ -65,7 +65,7 @@ func (store *InMemoryUserStore) AddUser(user User) *InMemoryUserStore {
 	// NOTE: after Clone(), each thread modififies the clone of its own, not the same memory region
 
 	numId := len(newStore.Users)
-	store.updateIndex(&user, numId)
+	newStore.updateIndex(&user, numId)
 	newStore.Users = append(newStore.Users, user)
 	return newStore
 }

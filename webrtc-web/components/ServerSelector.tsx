@@ -3,12 +3,22 @@
 import { WSServer } from "@/apis/types";
 import { Box, TextField, Select, MenuItem, Button } from "@mui/material";
 import { IaPLoginButton } from "./LoginButton";
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
 import { useLoginStatusPolling } from "@/apis/profile";
 
-// Select what signalling server to use
+const getNum = (s: string): number | undefined => {
+  try {
+    const x = parseInt(s);
+    if (!Number.isNaN(x) && Number.isFinite(x)) {
+      return x;
+    }
+  } catch (_) {}
+};
 
+const loginTimeoutMs = 60 * 1000;
+
+// Select what signalling server to use
 export function ServerSelector(props: {
   servers: WSServer[];
   onConnect: (server: WSServer) => void;
@@ -32,9 +42,32 @@ export function ServerSelector(props: {
     usePersistentStorage(PSKey.LoggingIn);
   const isLoggingIn = getLoggingIn() === "true";
 
+  const { getValue: getLogInStart, setValue: setLogInStart } =
+    usePersistentStorage(PSKey.LoggingStartedAt);
+
+  const logInStartedAt = getLogInStart() || "";
+
+  useEffect(() => {
+    const loginStartTx = getNum(logInStartedAt);
+    if (loginStartTx === undefined || loginStartTx === null) {
+      return;
+    }
+    const loginTimeoutAt = loginStartTx + loginTimeoutMs;
+    const now = new Date().valueOf();
+    const timeDelta = Math.max(loginTimeoutAt - now, 0);
+    const timeout = setTimeout(() => {
+      setLoggingIn("false");
+      setLogInStart("");
+    }, timeDelta);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [logInStartedAt]);
+
   const handleLoginClick = () => {
     // start polling (also the polling state would also survives page reload)
     setLoggingIn("true");
+    setLogInStart(new Date().valueOf().toString());
 
     // navigate the user to the oauth2 authorization portal
     if (hasIAP && selectedServerObj?.iap?.loginUrl) {

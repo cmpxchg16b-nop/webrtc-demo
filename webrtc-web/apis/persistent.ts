@@ -25,4 +25,5 @@ export enum PSKey {
   PreferredUsername = "preferred_username",
   HasLoggedIn = "has_logged_in",
   LoggingIn = "logging_in",
+  LoggingStartedAt = "logging_in_started_at",
 }

@@ -99,6 +99,10 @@ func main() {
 		UserSessionManager:      userSessionMgr,
 	})
 
+	mux.Handle("/profile/avatar", &pkghandler.ProfileAvatarHandler{
+		UserManager:        userMgr,
+		UserSessionManager: userSessionMgr,
+	})
 	mux.Handle("/profile/status", &pkghandler.ProfileStatusHandler{
 		UserManager:        userMgr,
 		UserSessionManager: userSessionMgr,
