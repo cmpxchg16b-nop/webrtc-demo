@@ -46,17 +46,16 @@ export function ServerSelector(props: {
     (server) => server.id === selectedServer,
   );
   const hasIAP = selectedServerObj?.iap && selectedServerObj.iap.loginUrl;
+  const handleConnect = () => {
+    const server = servers.find((server) => server.id === selectedServer);
+    if (server) {
+      setLoggingIn("false");
+      onConnect(server);
+    }
+  };
+
   const connectBtn = (
-    <Button
-      variant="contained"
-      loading={connecting}
-      onClick={() => {
-        const server = servers.find((server) => server.id === selectedServer);
-        if (server) {
-          onConnect(server);
-        }
-      }}
-    >
+    <Button variant="contained" loading={connecting} onClick={handleConnect}>
       Connect
     </Button>
   );
@@ -110,12 +109,7 @@ export function ServerSelector(props: {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   e.stopPropagation();
-                  const server = servers.find(
-                    (server) => server.id === selectedServer,
-                  );
-                  if (server) {
-                    onConnect(server);
-                  }
+                  handleConnect();
                 }
               }}
             />
@@ -138,9 +132,21 @@ export function ServerSelector(props: {
                 justifyContent: "center",
                 marginTop: "2",
                 gridColumn: "1 / span 2",
+                flexDirection: "column",
+                gap: 2,
               }}
             >
-              {isLoggingIn && <Box>{hintText}</Box>}
+              {isLoggingIn && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {hintText}
+                </Box>
+              )}
               {loggedIn && loggedInAs ? (
                 connectBtn
               ) : (
