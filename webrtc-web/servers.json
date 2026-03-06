@@ -24,7 +24,7 @@
     "url": "/api/ws",
     "name": "Test Server (Mock IAP)",
     "id": "mock-iap",
-    "iceServers": ["stun:webrtc-stun.duststars.dn42:3478"],
+    "iceServers": ["stun:stun.l.google.com:19302"],
     "apiPrefix": "/api",
     "iap": {
       "name": "mock-iap",

@@ -276,6 +276,7 @@ func (h *GithubOAuthLoginHandler) handleAuthorizationCode(w http.ResponseWriter,
 			// Generate random suffix (e.g., -a1b2) and retry
 			randomSuffix := fmt.Sprintf("-%04x", rand.Intn(0x10000))
 			newUser.Username = originalUsername + randomSuffix
+			log.Printf("Username collision: original=%q, new attempt=%q, retry=%d/%d", originalUsername, newUser.Username, i+1, maxRetries)
 			continue
 		}
 		w.WriteHeader(http.StatusInternalServerError)
