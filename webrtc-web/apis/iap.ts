@@ -17,9 +17,9 @@ function getDataURLFromBlob(blob: Blob): Promise<DataURL> {
 export function mockIAPOperator(): IAPOperator {
   return {
     async getAvatar(username: string): Promise<DataURL> {
-      const response = await fetch(
-        `https://avatars.githubusercontent.com/${username}`,
-      );
+      const searchParams = new URLSearchParams();
+      searchParams.set("username", username);
+      const response = await fetch(`/api/profile/avatar?${searchParams}`);
 
       try {
         const blob = await response.blob();

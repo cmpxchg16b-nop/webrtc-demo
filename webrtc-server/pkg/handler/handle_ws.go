@@ -6,32 +6,29 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	pkgconnreg "example.com/webrtcserver/pkg/connreg"
 	pkgframing "example.com/webrtcserver/pkg/framing"
+	pkglogin "example.com/webrtcserver/pkg/models/login"
+	pkguser "example.com/webrtcserver/pkg/models/user"
 	"example.com/webrtcserver/pkg/ws_proxy"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 type WebsocketHandler struct {
-	upgrader *websocket.Upgrader
-	cr       *pkgconnreg.ConnRegistry
-	timeout  time.Duration
-	counter  int
-}
-
-func NewWebsocketHandler(upgrader *websocket.Upgrader, cr *pkgconnreg.ConnRegistry, timeout time.Duration) *WebsocketHandler {
-	return &WebsocketHandler{
-		upgrader: upgrader,
-		cr:       cr,
-		timeout:  timeout,
-	}
+	Upgrader           *websocket.Upgrader
+	ConnectionRegistry *pkgconnreg.ConnRegistry
+	ClientTimeout      time.Duration
+	counter            int
+	UserManager        pkguser.UserManager
+	UserSessionManager pkglogin.UserSessionManager
 }
 
 func (handler *WebsocketHandler) sendBroadcastMsg(payload pkgframing.MessagePayload) error {
-	for key, connent := range handler.cr.Dump() {
+	for key, connent := range handler.ConnectionRegistry.Dump() {
 		if wsConn := connent.WSConn; wsConn != nil {
 			log.Printf("Broadcasting message to %s", key)
 			if err := wsConn.WriteJSON(payload); err != nil {
@@ -43,7 +40,7 @@ func (handler *WebsocketHandler) sendBroadcastMsg(payload pkgframing.MessagePayl
 }
 
 func (handler *WebsocketHandler) sendMsgTo(nodeId string, payload pkgframing.MessagePayload) error {
-	nodeEntry, err := handler.cr.GetByNodeId(nodeId)
+	nodeEntry, err := handler.ConnectionRegistry.GetByNodeId(nodeId)
 
 	if err != nil {
 		return fmt.Errorf("failed to get node entry by node id: %v", err)
@@ -63,8 +60,33 @@ func (handler *WebsocketHandler) getDefaultUserName(numId int) string {
 	return fmt.Sprintf("user%04d", numId)
 }
 
-func (handler *WebsocketHandler) handleTextMessage(key string, conn *ws_proxy.WebsocketWriteProxy, msg []byte, numId int) error {
-	cr := handler.cr
+func (handler *WebsocketHandler) getLoggedInAs(r *http.Request) *pkguser.User {
+	ctx := r.Context()
+	sessId := ctx.Value(CtxSessionKeySessionId)
+	if sessId == nil {
+		return nil
+	}
+
+	userId, err := handler.UserSessionManager.GetUserIdBySessionId(ctx, sessId.(string))
+	if err != nil {
+		return nil
+	}
+
+	if userId == "" {
+		return nil
+	}
+
+	userObj, err := handler.UserManager.GetUserById(ctx, userId)
+	if err != nil {
+		log.New(os.Stderr, "", 0).Printf("Failed to get user by id: %v", err)
+		return nil
+	}
+
+	return userObj
+}
+
+func (handler *WebsocketHandler) handleTextMessage(key string, conn *ws_proxy.WebsocketWriteProxy, msg []byte, numId int, loggedInAs *pkguser.User) error {
+	cr := handler.ConnectionRegistry
 	if cr == nil {
 		return fmt.Errorf("connection registry is not set")
 	}
@@ -76,6 +98,9 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *ws_proxy.We
 	}
 
 	if payload.Register != nil {
+		if payload.Register.NodeName == "" && loggedInAs != nil {
+			payload.Register.NodeName = loggedInAs.Username
+		}
 		if payload.Register.NodeName == "" {
 			payload.Register.NodeName = handler.getDefaultUserName(numId)
 		}
@@ -148,8 +173,10 @@ func (handler *WebsocketHandler) handleTextMessage(key string, conn *ws_proxy.We
 }
 
 func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	upgrader := h.upgrader
-	cr := h.cr
+	loggedInAs := h.getLoggedInAs(r)
+
+	upgrader := h.Upgrader
+	cr := h.ConnectionRegistry
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
@@ -171,10 +198,10 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var gcTimer *time.Timer = nil
-	if int64(h.timeout) == 0 {
+	if int64(h.ClientTimeout) == 0 {
 		panic("timeout is not set")
 	}
-	gcTimer = time.NewTimer(h.timeout)
+	gcTimer = time.NewTimer(h.ClientTimeout)
 	defer func() {
 		if gcTimer != nil {
 			gcTimer.Stop()
@@ -202,11 +229,11 @@ func (h *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			switch msgType {
 			case websocket.TextMessage:
-				if err := h.handleTextMessage(remoteKey, connProxy, msg, numId); err != nil {
+				if err := h.handleTextMessage(remoteKey, connProxy, msg, numId, loggedInAs); err != nil {
 					log.Printf("Failed to handle text message from %s: %v", remoteKey, err)
 					continue
 				}
-				gcTimer.Reset(h.timeout)
+				gcTimer.Reset(h.ClientTimeout)
 			default:
 				log.Printf("Received unknown message type from %s: %d", remoteKey, msgType)
 			}

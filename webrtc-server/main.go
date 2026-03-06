@@ -63,13 +63,24 @@ func main() {
 		log.Fatalf("Github OAuth Client Secret not found")
 	}
 
+	// initiate UserManager and UserSessionManager, and
+	// inject them to where is needed
+	userMgr := &pkguser.MemoryUserManager{}
+	userSessionMgr := &pkglogin.MemoryUserSessionManager{}
+
 	upgrader := websocket.Upgrader{
 		CheckOrigin: cli.getOriginValidator(),
 	}
 
 	sm := pkgsafemap.NewSafeMap()
 	cr := pkgconnreg.NewConnRegistry(sm)
-	wsHandler := pkghandler.NewWebsocketHandler(&upgrader, cr, cli.WsTimeout)
+	wsHandler := &pkghandler.WebsocketHandler{
+		Upgrader:           &upgrader,
+		ConnectionRegistry: cr,
+		ClientTimeout:      cli.WsTimeout,
+		UserManager:        userMgr,
+		UserSessionManager: userSessionMgr,
+	}
 
 	var connsHandler http.Handler = pkghandler.NewConnsHandler(cr)
 
@@ -83,11 +94,6 @@ func main() {
 	ghTokenManager := &pkggithub.MemoryGithubLoginManager{
 		Debug: cli.Debug,
 	}
-
-	// initiate UserManager and UserSessionManager, and
-	// inject them to where is needed
-	userMgr := &pkguser.MemoryUserManager{}
-	userSessionMgr := &pkglogin.MemoryUserSessionManager{}
 
 	mux.Handle("/login/", &pkghandler.GithubOAuthLoginHandler{
 		GithubOAuthClientId:     gh_cli_id,
