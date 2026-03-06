@@ -113,16 +113,14 @@ function ModeSelector() {
 function WithMUITheme(props: { children: React.ReactNode }) {
   return (
     <ThemeProvider theme={theme}>
-      <QueryClientProvider client={queryClient}>
-        <CssBaseline />
-        {props.children}
+      <CssBaseline />
+      {props.children}
 
-        <Box sx={{ position: "absolute", top: 0, right: 0 }}>
-          <Box sx={{ padding: 1 }}>
-            <ModeSelector />
-          </Box>
+      <Box sx={{ position: "absolute", top: 0, right: 0 }}>
+        <Box sx={{ padding: 1 }}>
+          <ModeSelector />
         </Box>
-      </QueryClientProvider>
+      </Box>
     </ThemeProvider>
   );
 }
@@ -145,7 +143,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <WithMUITheme>{children}</WithMUITheme>
+        <QueryClientProvider client={queryClient}>
+          <WithMUITheme>{children}</WithMUITheme>
+        </QueryClientProvider>
       </body>
     </html>
   );

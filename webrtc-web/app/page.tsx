@@ -74,6 +74,7 @@ import {
   setupWsPing,
 } from "@/apis/ping";
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
+import { getIAPOperator } from "@/apis/iap";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -1601,6 +1602,13 @@ export default function Home() {
   const { getValue: getCurrentServer, setValue: setSelectedServer } =
     usePersistentStorage(PSKey.CurrentServer);
   const selectedServer = getCurrentServer() || (servers?.[0].id ?? "");
+  const selectedserverObject =
+    selectedServer && servers
+      ? servers.find((server) => server.id === selectedServer)
+      : undefined;
+  const iapOperator = selectedserverObject?.iap?.kind
+    ? getIAPOperator(selectedserverObject.iap.kind)
+    : undefined;
 
   const [searchKw, setSearchKw] = useState<string>("");
 
@@ -1741,6 +1749,7 @@ export default function Home() {
                 }}
               >
                 <RenderAvatar
+                  iapOperator={iapOperator}
                   username={name ?? ""}
                   size="large"
                   preferredColorIdx={preference.indexOfPreferColor}
@@ -1880,6 +1889,7 @@ export default function Home() {
               }}
             >
               <RenderAvatar
+                iapOperator={iapOperator}
                 username={activeConn ? userPreferenceMap[activeConn]?.name : ""}
                 size="small"
                 preferredColorIdx={
@@ -1917,6 +1927,7 @@ export default function Home() {
                 >
                   {messages.map((message) => (
                     <RenderMessage
+                      iapOperator={iapOperator}
                       key={message.messageId}
                       message={message}
                       patches={msgPatches[message.messageId] || []}

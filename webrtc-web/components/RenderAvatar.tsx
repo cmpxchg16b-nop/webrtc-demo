@@ -2,14 +2,23 @@
 
 import { Box } from "@mui/material";
 import { getPreferredColor } from "./ChangePreference";
+import { IAPOperator } from "@/apis/iap";
+import { useQuery } from "@tanstack/react-query";
 
 export function RenderAvatar(props: {
+  iapOperator: IAPOperator | undefined;
   username: string;
   url?: string;
   size?: "default" | "small" | "large";
   preferredColorIdx?: number | string;
 }) {
-  const { username, url, size = "default", preferredColorIdx } = props;
+  const {
+    iapOperator,
+    username,
+    url,
+    size = "default",
+    preferredColorIdx,
+  } = props;
   const firstCap =
     username && username.length > 0 ? username[0].toUpperCase() : "";
 
@@ -32,6 +41,42 @@ export function RenderAvatar(props: {
   bgColorUsedLight = colorToken.light;
   bgColorUsedDark = colorToken.dark;
 
+  // Use React Query to fetch avatar from IAPOperator
+  const { data: avatarUrl } = useQuery({
+    queryKey: ["avatar", username],
+    queryFn: async () => {
+      if (!iapOperator || !username) {
+        return null;
+      }
+      try {
+        const dataUrl = await iapOperator.getAvatar(username);
+        return dataUrl;
+      } catch (error) {
+        console.error("Failed to fetch avatar from IAPOperator:", error);
+        return null;
+      }
+    },
+  });
+
+  // If we have a valid avatar URL from IAPOperator, render it as an image
+  if (avatarUrl) {
+    return (
+      <Box
+        component="img"
+        src={avatarUrl}
+        alt={username}
+        sx={{
+          width: variants[size],
+          height: variants[size],
+          borderRadius: "100%",
+          objectFit: "cover",
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+
+  // Fallback to default letter avatar
   return (
     <Box
       sx={[
