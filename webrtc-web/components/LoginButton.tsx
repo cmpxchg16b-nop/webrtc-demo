@@ -20,7 +20,7 @@ export function IaPLoginButton(props: {
     if (typeof displayName === "string") {
       return displayName;
     }
-    return displayName.en_US;
+    return displayName?.en_US ?? "";
   };
 
   switch (iapContext.kind) {
