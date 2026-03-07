@@ -813,15 +813,33 @@ function attachPeerConnectionEventListeners(
   audioCtxRef: RefObject<AudioContext | null>,
   connTrackRef: RefObject<ConnTrack>,
 ) {
+  const logSource = logId ? ` [${logId}]` : "";
+
   if (!audioCtxRef.current) {
     audioCtxRef.current = new AudioContext();
-    console.log("[dbg] [track] audio context created:", audioCtxRef.current);
+    console.log(
+      `[dbg]${logSource} audio context created:`,
+      audioCtxRef.current,
+    );
   }
 
-  const logSource = logId ? ` [${logId}]` : "";
+  peerConnection.onconnectionstatechange = (ev) => {
+    console.log(
+      `[dbg]${logSource} connection state changed`,
+      ev,
+      "change to:",
+      peerConnection.connectionState,
+    );
+  };
+
   // registering event handlers for peerconnection handle
   peerConnection.oniceconnectionstatechange = (event) => {
-    console.log(`[dbg]${logSource} ice connection state changed`, event);
+    console.log(
+      `[dbg]${logSource} iceconnection state changed`,
+      event,
+      "change to:",
+      peerConnection.iceConnectionState,
+    );
     setConnTrackStatus((prev) => ({
       ...prev,
       [remoteNodeId]: {
@@ -842,7 +860,10 @@ function attachPeerConnectionEventListeners(
         },
       }));
     }
-    if (peerConnection.iceConnectionState === "checking") {
+    if (
+      peerConnection.iceConnectionState === "checking" ||
+      (peerConnection.iceConnectionState as any) === "connecting"
+    ) {
       setConnTrackStatus((prev) => ({
         ...prev,
         [remoteNodeId]: {
@@ -990,48 +1011,6 @@ function attachPeerConnectionEventListeners(
         },
       };
     });
-  };
-
-  // Handle renegotiation - triggered when tracks are added/removed or other session changes
-  peerConnection.onnegotiationneeded = async () => {
-    console.log(
-      `[dbg]${logSource} Negotiation needed for peer`,
-      remoteNodeId,
-      "starting renegotiation",
-    );
-
-    try {
-      // Set a flag to indicate we're in the process of negotiating
-      setConnTrackStatus((prev) => ({
-        ...prev,
-        [remoteNodeId]: {
-          ...prev[remoteNodeId],
-          negotiating: true,
-        },
-      }));
-
-      await createAndSendOffer(
-        peerConnection,
-        wsRef,
-        nodeIdRef.current,
-        remoteNodeId,
-        logSource,
-      );
-    } catch (e) {
-      console.error(
-        `[dbg]${logSource} Renegotiation failed for peer`,
-        remoteNodeId,
-        e,
-      );
-    } finally {
-      setConnTrackStatus((prev) => ({
-        ...prev,
-        [remoteNodeId]: {
-          ...prev[remoteNodeId],
-          negotiating: false,
-        },
-      }));
-    }
   };
 }
 
