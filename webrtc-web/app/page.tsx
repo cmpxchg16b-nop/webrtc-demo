@@ -36,6 +36,9 @@ import {
   MenuItem,
   TextField,
   Paper,
+  Drawer,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
   Dispatch,
@@ -58,7 +61,7 @@ import {
   newUint32StreamParser,
   wordSize,
 } from "@/utls/streams";
-import { Edit } from "@mui/icons-material";
+import { Edit, Menu } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
 import { createThumbnailFromFile } from "@/apis/thumbnail";
 import { useUnreads } from "@/apis/unreads";
@@ -1445,6 +1448,10 @@ export default function Home() {
   });
   const [activeConn, setActiveConn] = useState("");
   const [showPreferenceDialog, setShowPreferenceDialog] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const switchActiveConn = (
     remoteNodeId: string,
@@ -1711,139 +1718,158 @@ export default function Home() {
   const { showDropArea, onDrop, onDragOver, onMouseOut } =
     useFileDrop(onFileList);
 
+  const handleDrawerToggle = () => {
+    setMobileDrawerOpen(!mobileDrawerOpen);
+  };
+
+  const drawerContent = (
+    <Fragment>
+      {connected ? (
+        <Box>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+              paddingTop: 4,
+              paddingBottom: 0,
+            }}
+          >
+            <RenderAvatar
+              iapOperator={iapOperator}
+              username={name ?? ""}
+              size="large"
+              preferredColorIdx={preference.indexOfPreferColor}
+            />
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              <Box>{name}</Box>
+              <Tooltip title="Change name">
+                <IconButton
+                  sx={{
+                    marginLeft: -4,
+                    position: "relative",
+                    left: "30px",
+                  }}
+                  size="small"
+                  onClick={() => {
+                    setPreference((prev) => ({
+                      ...prev,
+                      name: name || prev.name,
+                    }));
+                    setShowPreferenceDialog(true);
+                  }}
+                >
+                  <Edit fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+          <Box sx={{ padding: 2 }}>
+            <TextField
+              label="Search by name"
+              value={searchKw}
+              onChange={(e) => setSearchKw(e.target.value)}
+              fullWidth
+              variant="standard"
+            />
+          </Box>
+          <Box>
+            {sortConnsByLatestUnread(
+              conns
+                .filter((conn) => conn.node_id !== nodeId)
+                .filter(
+                  (conn) =>
+                    !searchKw || conn.entry?.node_name?.includes(searchKw),
+                ),
+              connTrackStatus,
+              getUnreadMessages(),
+            ).map((conn) => {
+              const unreadsSet = new Set(unreads);
+              const unreadPeerMsgs = getPeerUnreadMsgs(
+                connTrackStatus,
+                conn.node_id,
+                unreadsSet,
+              );
+              const preferredColorIdxS =
+                conn.entry?.attributes?.[WellKnownAttributes.PreferredColor];
+              const preferredColorIdx = !!preferredColorIdxS
+                ? parseInt(preferredColorIdxS)
+                : undefined;
+
+              const numUnreads = unreadPeerMsgs.length;
+              const latestUnreadMessage = unreadPeerMsgs.sort(
+                (a, b) => b.timestamp - a.timestamp,
+              )[0];
+              return (
+                <RenderPeerEntry
+                  preferredColorIdx={preferredColorIdx}
+                  conn={conn}
+                  avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
+                  key={conn.node_id}
+                  activeNodeId={activeConn}
+                  onSelect={() => {
+                    saveScrollTop(activeConn, msgsBoxRef);
+                    const server = servers.find(
+                      (server) => server.id === selectedServer,
+                    );
+                    if (server) {
+                      switchActiveConn(
+                        conn.node_id,
+                        server.iceServers,
+                        addUnreadMessageIds,
+                      );
+                    }
+                    if (isMobile) {
+                      setMobileDrawerOpen(false);
+                    }
+                  }}
+                  numUnreads={numUnreads}
+                  latestUnreadMessage={latestUnreadMessage}
+                />
+              );
+            })}
+          </Box>
+        </Box>
+      ) : (
+        <ServerSelector
+          connecting={connecting}
+          onConnect={(server) => {
+            doConnect(server, addUnreadMessageIds, preference);
+          }}
+          preferName={preference.name}
+          onPreferNameChange={(n) => {
+            setPreference((prev) => ({ ...prev, name: n }));
+          }}
+          selectedServer={selectedServer}
+          onSelectedServerChange={(serverId) => setSelectedServer(serverId)}
+          servers={servers}
+        />
+      )}
+    </Fragment>
+  );
+
   return (
     <Fragment>
       <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
-        <LeftPanel>
-          {connected ? (
-            <Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 1,
-                  paddingTop: 4,
-                  paddingBottom: 0,
-                }}
-              >
-                <RenderAvatar
-                  iapOperator={iapOperator}
-                  username={name ?? ""}
-                  size="large"
-                  preferredColorIdx={preference.indexOfPreferColor}
-                />
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 0.5,
-                  }}
-                >
-                  <Box>{name}</Box>
-                  <Tooltip title="Change name">
-                    <IconButton
-                      sx={{
-                        marginLeft: -4,
-                        position: "relative",
-                        left: "30px",
-                      }}
-                      size="small"
-                      onClick={() => {
-                        setPreference((prev) => ({
-                          ...prev,
-                          name: name || prev.name,
-                        }));
-                        setShowPreferenceDialog(true);
-                      }}
-                    >
-                      <Edit fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
-              <Box sx={{ padding: 2 }}>
-                <TextField
-                  label="Search by name"
-                  value={searchKw}
-                  onChange={(e) => setSearchKw(e.target.value)}
-                  fullWidth
-                  variant="standard"
-                />
-              </Box>
-              <Box>
-                {sortConnsByLatestUnread(
-                  conns
-                    .filter((conn) => conn.node_id !== nodeId)
-                    .filter(
-                      (conn) =>
-                        !searchKw || conn.entry?.node_name?.includes(searchKw),
-                    ),
-                  connTrackStatus,
-                  getUnreadMessages(),
-                ).map((conn) => {
-                  const unreadsSet = new Set(unreads);
-                  const unreadPeerMsgs = getPeerUnreadMsgs(
-                    connTrackStatus,
-                    conn.node_id,
-                    unreadsSet,
-                  );
-                  const preferredColorIdxS =
-                    conn.entry?.attributes?.[
-                      WellKnownAttributes.PreferredColor
-                    ];
-                  const preferredColorIdx = !!preferredColorIdxS
-                    ? parseInt(preferredColorIdxS)
-                    : undefined;
-
-                  const numUnreads = unreadPeerMsgs.length;
-                  const latestUnreadMessage = unreadPeerMsgs.sort(
-                    (a, b) => b.timestamp - a.timestamp,
-                  )[0];
-                  return (
-                    <RenderPeerEntry
-                      preferredColorIdx={preferredColorIdx}
-                      conn={conn}
-                      avatarUrl={connTrackStatus?.[conn.node_id]?.avatarUrl}
-                      key={conn.node_id}
-                      activeNodeId={activeConn}
-                      onSelect={() => {
-                        saveScrollTop(activeConn, msgsBoxRef);
-                        const server = servers.find(
-                          (server) => server.id === selectedServer,
-                        );
-                        if (server) {
-                          switchActiveConn(
-                            conn.node_id,
-                            server.iceServers,
-                            addUnreadMessageIds,
-                          );
-                        }
-                      }}
-                      numUnreads={numUnreads}
-                      latestUnreadMessage={latestUnreadMessage}
-                    />
-                  );
-                })}
-              </Box>
-            </Box>
-          ) : (
-            <ServerSelector
-              connecting={connecting}
-              onConnect={(server) => {
-                doConnect(server, addUnreadMessageIds, preference);
-              }}
-              preferName={preference.name}
-              onPreferNameChange={(n) => {
-                setPreference((prev) => ({ ...prev, name: n }));
-              }}
-              selectedServer={selectedServer}
-              onSelectedServerChange={(serverId) => setSelectedServer(serverId)}
-              servers={servers}
-            />
-          )}
-        </LeftPanel>
+        {isMobile ? (
+          <Drawer
+            anchor="left"
+            open={mobileDrawerOpen}
+            onClose={() => setMobileDrawerOpen(false)}
+          >
+            <LeftPanel>{drawerContent}</LeftPanel>
+          </Drawer>
+        ) : (
+          <LeftPanel>{drawerContent}</LeftPanel>
+        )}
         {activeConn ? (
           <Box
             sx={{
@@ -1867,6 +1893,15 @@ export default function Home() {
                 gap: 1,
               }}
             >
+              {isMobile && (
+                <IconButton
+                  edge="start"
+                  onClick={handleDrawerToggle}
+                  sx={{ mr: 1 }}
+                >
+                  <Menu />
+                </IconButton>
+              )}
               <RenderAvatar
                 iapOperator={iapOperator}
                 username={activeConn ? userPreferenceMap[activeConn]?.name : ""}
