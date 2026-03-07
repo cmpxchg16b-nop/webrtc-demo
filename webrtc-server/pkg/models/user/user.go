@@ -18,11 +18,15 @@ type User struct {
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
 	GithubId    string `json:"github_id"`
+	DN42ASN     string `json:"dn42_asn"`
+	GoogleId    string `json:"google_id"`
 }
 
 type UserManager interface {
 	// returns (theUser, created, error)
 	LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (*User, bool, error)
+
+	LoadOrCreateNewUserByDN42ASN(ctx context.Context, dn42ASN string, newUser User) (*User, bool, error)
 
 	GetUserById(ctx context.Context, userId string) (*User, error)
 
@@ -34,6 +38,7 @@ type InMemoryUserStore struct {
 	IndexById       map[string]int
 	IndexByGithubId map[string]int
 	IndexByUsername map[string]int
+	IndexByDN42ASN  map[string]int
 }
 
 // Only call this after indexes were cloned, make sure you are modifying a memory region that
@@ -42,6 +47,7 @@ func (newStore *InMemoryUserStore) updateIndex(u *User, i int) {
 	newStore.IndexById[u.Id] = i
 	newStore.IndexByGithubId[u.GithubId] = i
 	newStore.IndexByUsername[u.Username] = i
+	newStore.IndexByDN42ASN[u.DN42ASN] = i
 }
 
 func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
@@ -51,6 +57,7 @@ func (store *InMemoryUserStore) Clone() *InMemoryUserStore {
 	newStore.IndexById = make(map[string]int)
 	newStore.IndexByGithubId = make(map[string]int)
 	newStore.IndexByUsername = make(map[string]int)
+	newStore.IndexByDN42ASN = make(map[string]int)
 	if store != nil {
 		*newStore = *store
 		newStore.Users = make([]User, len(store.Users))
@@ -101,6 +108,25 @@ func (memUserMngr *MemoryUserManager) doAddUserByGithubId(user User) (*User, boo
 	}
 }
 
+// Returns true means new user is created
+func (memUserMngr *MemoryUserManager) doAddUserByDN42ASN(user User) (*User, bool, error) {
+	for {
+		oldStore := memUserMngr.store.Load()
+		if oldStore != nil {
+			if idx, hit := oldStore.IndexByDN42ASN[user.DN42ASN]; hit {
+				return &oldStore.Users[idx], false, nil
+			}
+		}
+		newStore, err := oldStore.AddUser(user)
+		if err != nil {
+			return nil, false, err
+		}
+		if memUserMngr.store.CompareAndSwap(oldStore, newStore) {
+			return &user, true, nil
+		}
+	}
+}
+
 func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (*User, bool, error) {
 
 	if id := newUser.Id; id == "" {
@@ -108,6 +134,19 @@ func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByGithubId(ctx context.
 	}
 
 	u, accepted, err := memUserMngr.doAddUserByGithubId(newUser)
+	if err != nil {
+		return nil, false, err
+	}
+	return u, accepted, nil
+}
+
+func (memUserMngr *MemoryUserManager) LoadOrCreateNewUserByDN42ASN(ctx context.Context, dn42ASN string, newUser User) (*User, bool, error) {
+
+	if id := newUser.Id; id == "" {
+		newUser.Id = uuid.NewString()
+	}
+
+	u, accepted, err := memUserMngr.doAddUserByDN42ASN(newUser)
 	if err != nil {
 		return nil, false, err
 	}

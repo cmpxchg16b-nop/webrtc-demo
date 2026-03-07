@@ -30,6 +30,7 @@ type CLI struct {
 	GithubLoginRedirectURL    string        `name:"github-login-redir-url" help:"The redirect_uri parameter that will be pass to Github OAuth login API" default:"http://localhost:3000/api/login/auth"`
 	Debug                     bool          `name:"debug" help:"Toggle this to make it print extra verbose logs in stdout" default:"false"`
 	LoginSuccessRedirectURL   string        `name:"login-success-redir-url" help:"The page to which the user will be redirect to once oauth login is successful"`
+	KioubitLoginPubkey        string        `name:"kioubit-login-pubkey" help:"The path to the PEM pubkey file in order to use the Sign in with Kioubit service, this is optional"`
 }
 
 var cli CLI
@@ -95,7 +96,20 @@ func main() {
 		Debug: cli.Debug,
 	}
 
-	mux.Handle("/login/", &pkghandler.GithubOAuthLoginHandler{
+	if pubkeyPath := cli.KioubitLoginPubkey; pubkeyPath != "" {
+		pubkey, err := os.ReadFile(pubkeyPath)
+		if err != nil {
+			log.Fatalln("Failed to read path", pubkeyPath, err)
+		}
+		mux.Handle("/kioubit/login/", &pkghandler.KioubitLoginHandler{
+			LoginSuccessRedirectURL: cli.LoginSuccessRedirectURL,
+			UserManager:             userMgr,
+			UserSessionManager:      userSessionMgr,
+			KioubitPubkey:           pubkey,
+		})
+	}
+
+	mux.Handle("/github/login/", &pkghandler.GithubOAuthLoginHandler{
 		GithubOAuthClientId:     gh_cli_id,
 		GithubOAuthAppSecret:    gh_cli_sec,
 		GithubOAuthRedirURL:     cli.GithubLoginRedirectURL,
