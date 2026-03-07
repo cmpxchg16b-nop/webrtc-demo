@@ -1886,7 +1886,7 @@ export default function Home() {
             <Paper
               sx={{
                 flexShrink: 0,
-                padding: 2,
+                padding: 1.5,
                 borderRadius: 0,
                 display: "flex",
                 alignItems: "center",
@@ -1894,11 +1894,7 @@ export default function Home() {
               }}
             >
               {isMobile && (
-                <IconButton
-                  edge="start"
-                  onClick={handleDrawerToggle}
-                  sx={{ mr: 1 }}
-                >
+                <IconButton onClick={handleDrawerToggle}>
                   <Menu />
                 </IconButton>
               )}
@@ -2059,11 +2055,34 @@ export default function Home() {
             sx={{
               flex: 1,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              flexDirection: "column",
             }}
           >
-            Select a chat to start messaging
+            {isMobile && (
+              <Paper
+                sx={{
+                  flexShrink: 0,
+                  padding: 1.5,
+                  borderRadius: 0,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <IconButton onClick={handleDrawerToggle}>
+                  <Menu />
+                </IconButton>
+              </Paper>
+            )}
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              Select a chat to start messaging
+            </Box>
           </Box>
         )}
       </Box>

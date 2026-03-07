@@ -1,7 +1,15 @@
 "use client";
 
 import { WSServer } from "@/apis/types";
-import { Box, TextField, Select, MenuItem, Button } from "@mui/material";
+import {
+  Box,
+  TextField,
+  Select,
+  MenuItem,
+  Button,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 import { IaPLoginButton } from "./LoginButton";
 import { Fragment, useEffect } from "react";
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
@@ -37,6 +45,9 @@ export function ServerSelector(props: {
     onPreferNameChange,
     connecting,
   } = props;
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const { getValue: getLoggingIn, setValue: setLoggingIn } =
     usePersistentStorage(PSKey.LoggingIn);
@@ -117,7 +128,7 @@ export function ServerSelector(props: {
           padding: 2,
         }}
       >
-        <Box sx={{ justifySelf: "right" }}>Choose Server:</Box>
+        <Box sx={{ justifySelf: "right" }}>{!isMobile && "Server"}</Box>
         <Select
           variant="standard"
           label="Server"

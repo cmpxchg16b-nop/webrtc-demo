@@ -13,7 +13,7 @@ export function LeftPanel(props: {
     <Box
       sx={[
         {
-          width: `${width}px`,
+          width: `${Math.min((4 / 5) * window.innerWidth, width)}px`,
           height: "100%",
           position: "relative",
           flexShrink: 0,
