@@ -1,6 +1,6 @@
 "use client";
 
-import { WSServer } from "@/apis/types";
+import { Profile, WSServer } from "@/apis/types";
 import {
   Box,
   TextField,
@@ -13,7 +13,7 @@ import {
 import { IaPLoginButton } from "./LoginButton";
 import { Fragment, useEffect } from "react";
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
-import { useLoginStatusPolling } from "@/apis/profile";
+import { getLoginStatusHintTxt, useLoginStatusPolling } from "@/apis/profile";
 
 const getNum = (s: string): number | undefined => {
   try {
@@ -29,21 +29,25 @@ const loginTimeoutMs = 60 * 1000;
 // Select what signalling server to use
 export function ServerSelector(props: {
   servers: WSServer[];
-  onConnect: (server: WSServer) => void;
   selectedServer: string;
   onSelectedServerChange: (serverId: string) => void;
+  onPinnedServerChange: (serverId: string) => void;
   preferName: string;
   onPreferNameChange: (preferName: string) => void;
   connecting: boolean;
+  loggedIn: boolean | undefined;
+  loggedInAs: Profile | undefined;
 }) {
   const {
     servers,
     selectedServer,
     onSelectedServerChange,
-    onConnect,
     preferName,
     onPreferNameChange,
     connecting,
+    loggedIn,
+    loggedInAs,
+    onPinnedServerChange,
   } = props;
 
   const theme = useTheme();
@@ -94,7 +98,7 @@ export function ServerSelector(props: {
     const server = servers.find((server) => server.id === selectedServer);
     if (server) {
       setLoggingIn("false");
-      onConnect(server);
+      onPinnedServerChange(server.id);
     }
   };
 
@@ -104,10 +108,7 @@ export function ServerSelector(props: {
     </Button>
   );
 
-  const { loggedIn, loggedInAs, hintText } = useLoginStatusPolling(
-    selectedServerObj?.apiPrefix || "",
-    3000,
-  );
+  const hintText = getLoginStatusHintTxt(loggedIn, loggedInAs);
 
   return (
     <Box

@@ -22,6 +22,20 @@ const tryParseProfile = (j: string | null | undefined): Profile | undefined => {
   } catch (_) {}
 };
 
+export function getLoginStatusHintTxt(
+  loggedIn: boolean | undefined,
+  loggedInAs: Profile | undefined,
+): string {
+  let hintText = "Waiting for authorization ...";
+  if (!!loggedIn) {
+    hintText = "You are logged in, fetching profile ...";
+    if (!!loggedInAs) {
+      hintText = `Logged in as ${loggedInAs.displayName || loggedInAs.username || "(unknown)"}`;
+    }
+  }
+  return hintText;
+}
+
 export function useLoginStatusPolling(apiPrefix: string, intervalMs: number) {
   const loggedInSt = usePersistentStorage(PSKey.HasLoggedIn);
   const loggedInAsSt = usePersistentStorage(PSKey.LoggedInAs);
@@ -80,5 +94,5 @@ export function useLoginStatusPolling(apiPrefix: string, intervalMs: number) {
     }
   }
 
-  return { loggedIn, loggedInAs, hintText, err };
+  return { loggedIn, loggedInAs, err };
 }

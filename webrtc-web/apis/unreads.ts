@@ -1,82 +1,71 @@
 import { RefObject, useState } from "react";
+import { PSKey, usePersistentStorage } from "./persistent";
 
 const UNREADS_STORAGE_KEY = "webrtc_unread_message_ids";
 
 export type UseUnreadsHookReturn = {
-  unreads: string[];
-  setUnreads: (unreads: string[]) => void;
-  addUnreadMessageIds: (unreadMsgIds: string[]) => void;
-  updateUnreadMessageIds: (currentlyVisibleMessages: string[]) => void;
-  getUnreadMessages: () => Set<string>;
+  // map of <to_node_id>, <msg_ids>
+  unreads: Record<string, string[]>;
+  setUnreads: (to_node_id: string, unreads: string[]) => void;
+  addUnreadMessageIds: (to_node_id: string, unreadMsgIds: string[]) => void;
+  updateUnreadMessageIds: (
+    to_node_id: string,
+    currentlyVisibleMessages: string[],
+  ) => void;
+  getUnreadMessages: () => Record<string, string[]>;
 };
-
-function doLoad(nodeId: string): string[] {
-  if (!nodeId) {
-    return [];
-  }
-
-  if (typeof window === "undefined") {
-    return [];
-  }
-  const stored = localStorage.getItem(UNREADS_STORAGE_KEY + ":" + nodeId);
-  if (!stored) {
-    return [];
-  }
-
-  try {
-    return stored.split(",") as string[];
-  } catch {
-    return [];
-  }
-}
 
 // this hook maintains a globally shared pool of unread message IDs.
 // and it serves as the single authority of unread message IDs,
 // any message isn't really unread unless it has been queued into here,
 // any message isn't really read unless it has been removed from here.
-export function useUnreads(nodeIdRef: RefObject<string>): UseUnreadsHookReturn {
-  const [unreads, setUnreads] = useState<string[] | undefined>(undefined);
-
-  function doStore(unreadMsgIds: string[] | Set<string>, nodeId: string) {
-    if (!nodeId) {
-      return;
+export function useUnreads(): UseUnreadsHookReturn {
+  const unreadsSt = usePersistentStorage(PSKey.Unreads);
+  const getVal: () => Record<string, string[]> = () => {
+    const storedVal = unreadsSt.getValue();
+    if (storedVal) {
+      try {
+        return (JSON.parse(storedVal) || {}) as Record<string, string[]>;
+      } catch (_) {}
     }
-
-    const ids = Array.from(unreadMsgIds);
-    localStorage.setItem(UNREADS_STORAGE_KEY + ":" + nodeId, ids.join(","));
-    setUnreads(ids);
-  }
-
-  const getUnreadMessages = (): Set<string> => {
-    return new Set(doLoad(nodeIdRef.current));
-  };
-
-  const addUnreadMessageIds = (unreadMsgIds: string[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const newUnreads = Array.from(
-      new Set([...getUnreadMessages(), ...unreadMsgIds]),
-    );
-    doStore(newUnreads, nodeIdRef.current);
-  };
-
-  const updateUnreadMessageIds = (currentlyVisibleMessages: string[]) => {
-    if (typeof window === "undefined") {
-      return new Set();
-    }
-    const existing = getUnreadMessages();
-    const visibleSet = new Set(currentlyVisibleMessages);
-    const remaining = existing.difference(visibleSet);
-    doStore(remaining, nodeIdRef.current);
+    return {};
   };
 
   return {
-    unreads: unreads || doLoad(nodeIdRef.current),
-    setUnreads: (unreads) => doStore(unreads, nodeIdRef.current),
-    addUnreadMessageIds,
-    updateUnreadMessageIds,
-    getUnreadMessages,
+    unreads: getVal(),
+    setUnreads: (toNode, unreads) => {
+      const val = getVal();
+      const newVal = {
+        ...val,
+        [toNode]: unreads,
+      };
+      unreadsSt.setValue(JSON.stringify(newVal));
+    },
+    addUnreadMessageIds: (toNode, unreads) => {
+      if (!toNode) {
+        console.error("add unread msgids to null node");
+        return;
+      }
+      const val = getVal();
+      const newVal = {
+        ...val,
+        [toNode]: [...(val[toNode] ?? []), ...unreads],
+      };
+      unreadsSt.setValue(JSON.stringify(newVal));
+    },
+    updateUnreadMessageIds: (toNode, visibles) => {
+      const val = getVal();
+      const originSet = new Set(val[toNode] ?? []);
+      const visibleSet = new Set(visibles);
+      const diffSet = originSet.difference(visibleSet);
+      const newVal = {
+        ...val,
+        [toNode]: Array.from(diffSet),
+      };
+      unreadsSt.setValue(JSON.stringify(newVal));
+    },
+    getUnreadMessages: () => {
+      return getVal();
+    },
   };
 }

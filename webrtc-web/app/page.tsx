@@ -26,6 +26,7 @@ import {
   WSServer,
   MessagePatchesMap,
   WSConnStatusShort,
+  Profile,
 } from "@/apis/types";
 import { ChangePreference } from "@/components/ChangePreference";
 import {
@@ -80,6 +81,8 @@ import {
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
 import { getIAPOperator } from "@/apis/iap";
 import { ConnStatusDisplay } from "@/components/ConnStatusDisplay";
+import { useLoginStatusPolling } from "@/apis/profile";
+import { useQuery } from "@tanstack/react-query";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -101,15 +104,26 @@ function makeConnTrackEntry(iceServers: string[]): ConnTrackEntry {
 // key is the node_id of remote peer
 type ConnTrack = Record<string, ConnTrackEntry>;
 
+interface WSConnRecord {
+  serverId: string;
+  ws: WebSocket;
+  shouldReconnect: boolean;
+}
+
 function useWs(
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
   setMsgPatches: Dispatch<SetStateAction<MessagePatchesMap>>,
   audioCtxRef: RefObject<AudioContext | null>,
+  servers: WSServer[],
+  pinnedServerId: string,
+  selectedServerId: string,
+  loggedIn: boolean | undefined,
 ) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const correlationId = useMemo(() => crypto.randomUUID(), []);
+  const { addUnreadMessageIds } = useUnreads();
 
   const [nodeId, setNodeId] = useState<string>("");
   const nodeIdRef = useRef<string>("");
@@ -131,11 +145,16 @@ function useWs(
       setConns(conns);
     });
 
-  const doConnect = (
-    server: WSServer,
-    onUnread: (messageIds: string[]) => void,
-    preference: Preference,
-  ) => {
+  const allWsConnsRef = useRef<WSConnRecord[]>([]);
+
+  const doConnect = (server: WSServer) => {
+    if (allWsConnsRef.current.find((rec) => rec.serverId === server.id)) {
+      console.log(
+        `Server ${server.id} already has connection record, skipping for singleton.`,
+      );
+      return;
+    }
+
     const addr = appendWsPathToCurrentOrigin(server.url);
     const iceServers = server.iceServers;
 
@@ -143,6 +162,25 @@ function useWs(
     setWSConnStatus(WSConnStatusShort.Connecting);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
+
+    const cleanUp = () => {
+      setConnected(false);
+      setConnecting(false);
+      setConns([]);
+      if (pingTimerRef.current !== null && pingTimerRef.current !== undefined) {
+        clearInterval(pingTimerRef.current);
+        pingTimerRef.current = undefined;
+      }
+      connTrackRef.current = {};
+      nodeIdRef.current = "";
+      setNodeId("");
+    };
+    const record: WSConnRecord = {
+      serverId: server.id,
+      ws: ws,
+      shouldReconnect: true,
+    };
+    allWsConnsRef.current.push(record);
     const logSource = "acceptor";
 
     ws.onopen = () => {
@@ -151,14 +189,12 @@ function useWs(
       setConnected(true);
       setConnecting(false);
       const registerPayload: RegisterPayload = {
-        node_name: preference.name,
+        node_name: "",
       };
       const registerMsg: MessagePayload = {
         register: registerPayload,
         attributes_announcement: {
           attributes: {
-            [WellKnownAttributes.PreferredColor]:
-              preference.indexOfPreferColor.toString(),
             [WellKnownAttributes.SupportAttachment]: "true",
           },
         },
@@ -172,21 +208,20 @@ function useWs(
         correlationId,
       );
     };
-    const cleanUp = () => {
-      setConnected(false);
-      setConnecting(false);
-      setConns([]);
-      if (pingTimerRef.current !== null && pingTimerRef.current !== undefined) {
-        clearInterval(pingTimerRef.current);
-        pingTimerRef.current = undefined;
-      }
-      connTrackRef.current = {};
-      nodeIdRef.current = "";
-      setNodeId("");
-    };
+
     ws.onclose = () => {
       setWSConnStatus(WSConnStatusShort.Offline);
       cleanUp();
+
+      if (record.shouldReconnect) {
+        console.log("Disconnected, will reconnect later");
+        setTimeout(() => {
+          allWsConnsRef.current = allWsConnsRef.current.filter(
+            (x) => x.serverId !== server.id,
+          );
+          doConnect(server);
+        }, 3000);
+      }
     };
     ws.onerror = (error) => {
       console.error(`[dbg] [${logSource}] ws error`, error);
@@ -268,7 +303,8 @@ function useWs(
                 setMsgPatches,
                 remoteNodeId,
                 logSource,
-                onUnread,
+                (unreads) =>
+                  addUnreadMessageIds(nodeIdRef.current || "", unreads),
               );
               if (dc.label === PredefinedDCLabel.Chat) {
                 ent.dataChannel = dc;
@@ -415,6 +451,41 @@ function useWs(
     };
   };
 
+  useEffect(() => {
+    const selectedSrv = servers.find((s) => s.id === selectedServerId);
+    const pinnedSrv = servers.find((s) => s.id === pinnedServerId);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (pinnedServerId === selectedServerId && selectedSrv && pinnedSrv) {
+      // should connect now
+      const readyToConnect = loggedIn || !selectedSrv.iap;
+      if (readyToConnect) {
+        if (
+          allWsConnsRef.current.find((rec) => rec.serverId === pinnedServerId)
+        ) {
+          // already have connection
+          return;
+        }
+        // clean up all irrelevant connections
+        const conns = allWsConnsRef.current;
+        allWsConnsRef.current = [];
+        for (const conn of conns) {
+          conn.shouldReconnect = false;
+          if (conn.ws) {
+            if (
+              conn.ws.readyState === conn.ws.CLOSED ||
+              conn.ws.readyState === conn.ws.CLOSING
+            ) {
+              continue;
+            }
+            conn.ws.close();
+            console.log(`Clean up ${conn.ws} of server ${conn.serverId}`);
+          }
+        }
+        timers.push(setTimeout(() => doConnect(pinnedSrv)));
+      }
+    }
+  }, [servers, selectedServerId, pinnedServerId, loggedIn]);
+
   return {
     rtt,
     lastSeq,
@@ -425,7 +496,6 @@ function useWs(
     connected,
     connecting,
     wsRef,
-    doConnect,
     connTrackRef,
     wsConnStatus,
   };
@@ -1433,6 +1503,28 @@ export default function Home() {
   const [msgPatches, setMsgPatches] = useState<MessagePatchesMap>({});
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  const { data: servers = [] } = useQuery<WSServer[]>({
+    queryKey: ["signallingServers"],
+    queryFn: () => getSignallingServers(),
+  });
+
+  const { getValue: getCurrentServer, setValue: setSelectedServer } =
+    usePersistentStorage(PSKey.CurrentServer);
+  const selectedServerId = getCurrentServer() || "";
+  const pinnedSrvSt = usePersistentStorage(PSKey.PinnedServer);
+  const pinnedServer = pinnedSrvSt.getValue() || "";
+  const setPinnedServer = (s: string) => pinnedSrvSt.setValue(s);
+  const selectedserverObject = servers?.find(
+    (server) => server.id === selectedServerId,
+  );
+  const { loggedIn, loggedInAs } = useLoginStatusPolling(
+    selectedserverObject?.apiPrefix || "",
+    3000,
+  );
+  const iapOperator = selectedserverObject?.iap?.kind
+    ? getIAPOperator(selectedserverObject.iap.kind)
+    : undefined;
+
   const {
     rtt,
     lastSeq,
@@ -1443,10 +1535,17 @@ export default function Home() {
     connected,
     connecting,
     wsRef,
-    doConnect,
     connTrackRef,
     wsConnStatus,
-  } = useWs(setConnTrackStatus, setMsgPatches, audioCtxRef);
+  } = useWs(
+    setConnTrackStatus,
+    setMsgPatches,
+    audioCtxRef,
+    servers,
+    pinnedServer,
+    selectedServerId,
+    loggedIn,
+  );
 
   const name = conns
     ? conns.find((conn) => conn.node_id === nodeId)?.entry?.node_name
@@ -1594,27 +1693,10 @@ export default function Home() {
   };
 
   const userPreferenceMap = getUserPreferenceMap(conns ?? []);
-  const servers: WSServer[] = getSignallingServers();
-  const { getValue: getCurrentServer, setValue: setSelectedServer } =
-    usePersistentStorage(PSKey.CurrentServer);
-  const selectedServer = getCurrentServer() || (servers?.[0].id ?? "");
-  const selectedserverObject =
-    selectedServer && servers
-      ? servers.find((server) => server.id === selectedServer)
-      : undefined;
-  const iapOperator = selectedserverObject?.iap?.kind
-    ? getIAPOperator(selectedserverObject.iap.kind)
-    : undefined;
 
   const [searchKw, setSearchKw] = useState<string>("");
 
   const msgsBoxRef = useRef<HTMLDivElement>(null);
-  const {
-    getUnreadMessages,
-    addUnreadMessageIds,
-    unreads,
-    updateUnreadMessageIds,
-  } = useUnreads(nodeIdRef);
 
   const followingModeRef = useRef(false);
 
@@ -1650,9 +1732,17 @@ export default function Home() {
     }
   }, [activeConn]);
 
+  const { updateUnreadMessageIds, getUnreadMessages, addUnreadMessageIds } =
+    useUnreads();
+  const unreads: string[] = getUnreadMessages()?.[nodeId] ?? [];
+
   useEffect(() => {
     const it = setInterval(
-      () => updateUnreadMessageIds(getVisibleMessageIds(msgsBoxRef)),
+      () =>
+        updateUnreadMessageIds(
+          nodeIdRef.current,
+          getVisibleMessageIds(msgsBoxRef),
+        ),
       1000,
     );
 
@@ -1660,7 +1750,7 @@ export default function Home() {
   }, []);
 
   const handleScroll = () => {
-    updateUnreadMessageIds(getVisibleMessageIds(msgsBoxRef));
+    updateUnreadMessageIds(nodeIdRef.current, getVisibleMessageIds(msgsBoxRef));
 
     const msgsBox = msgsBoxRef.current;
     if (msgsBox) {
@@ -1732,9 +1822,11 @@ export default function Home() {
     setMobileDrawerOpen(!mobileDrawerOpen);
   };
 
+  const dispUsername = loggedInAs?.displayName ?? loggedInAs?.username ?? "";
+
   const drawerContent = (
     <Fragment>
-      {selectedServer ? (
+      {selectedserverObject ? (
         <Box>
           <Box
             sx={{
@@ -1748,7 +1840,7 @@ export default function Home() {
           >
             <RenderAvatar
               iapOperator={iapOperator}
-              username={name ?? ""}
+              username={loggedInAs?.username ?? ""}
               size="large"
               preferredColorIdx={preference?.indexOfPreferColor}
             />
@@ -1760,7 +1852,7 @@ export default function Home() {
                 gap: 0.5,
               }}
             >
-              <Box>{name}</Box>
+              <Box>{dispUsername}</Box>
               <ConnStatusDisplay
                 colorCodes={undefined}
                 connStatus={wsConnStatus}
@@ -1804,7 +1896,7 @@ export default function Home() {
                     !searchKw || conn.entry?.node_name?.includes(searchKw),
                 ),
               connTrackStatus,
-              getUnreadMessages(),
+              new Set(unreads),
             ).map((conn) => {
               const unreadsSet = new Set(unreads);
               const unreadPeerMsgs = getPeerUnreadMsgs(
@@ -1832,13 +1924,14 @@ export default function Home() {
                   onSelect={() => {
                     saveScrollTop(activeConn, msgsBoxRef);
                     const server = servers.find(
-                      (server) => server.id === selectedServer,
+                      (server) => server.id === selectedServerId,
                     );
                     if (server) {
                       switchActiveConn(
                         conn.node_id,
                         server.iceServers,
-                        addUnreadMessageIds,
+                        (msgIds) =>
+                          addUnreadMessageIds(nodeIdRef.current, msgIds),
                       );
                     }
                     if (isMobile) {
@@ -1855,16 +1948,18 @@ export default function Home() {
       ) : (
         <ServerSelector
           connecting={connecting}
-          onConnect={(server) => {
-            doConnect(server, addUnreadMessageIds, preference);
-          }}
           preferName={preference.name}
           onPreferNameChange={(n) => {
             setPreference((prev) => ({ ...prev, name: n }));
           }}
-          selectedServer={selectedServer}
+          onPinnedServerChange={(serverId) => {
+            setPinnedServer(serverId);
+          }}
+          selectedServer={selectedServerId}
           onSelectedServerChange={(serverId) => setSelectedServer(serverId)}
           servers={servers}
+          loggedIn={loggedIn}
+          loggedInAs={loggedInAs}
         />
       )}
     </Fragment>
