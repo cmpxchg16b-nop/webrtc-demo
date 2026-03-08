@@ -10,13 +10,10 @@ import {
   ConnTrackEntry,
   ConnTrackStatus,
   ConnTrackStatusEntry,
-  EchoDirectionC2S,
-  EchoDirectionS2C,
   FileTransferStatusEntry,
   ICEOfferPayload,
   MessagePayload,
   OfferType,
-  PingStateRef,
   PredefinedDCLabel,
   RegisterPayload,
   RenamePayload,
@@ -26,21 +23,19 @@ import {
   WSServer,
   MessagePatchesMap,
   WSConnStatusShort,
-  Profile,
 } from "@/apis/types";
 import { ChangePreference } from "@/components/ChangePreference";
 import {
   Box,
-  Button,
   Tooltip,
   IconButton,
-  Select,
   MenuItem,
   TextField,
   Paper,
   Drawer,
   useMediaQuery,
   useTheme,
+  Menu,
 } from "@mui/material";
 import {
   Dispatch,
@@ -63,7 +58,7 @@ import {
   newUint32StreamParser,
   wordSize,
 } from "@/utls/streams";
-import { Edit, Menu } from "@mui/icons-material";
+import { Edit, Menu as MenuIcon } from "@mui/icons-material";
 import { RenderAvatar } from "@/components/RenderAvatar";
 import { createThumbnailFromFile } from "@/apis/thumbnail";
 import { useUnreads } from "@/apis/unreads";
@@ -1840,6 +1835,16 @@ export default function Home() {
 
   const dispUsername = loggedInAs?.displayName ?? loggedInAs?.username ?? "";
 
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const menuOpen = Boolean(menuAnchorEl);
+  const handleCloseMenu = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    alert("Todo");
+  };
+
   const drawerContent = (
     <Fragment>
       {selectedserverObject && pinnedServer ? (
@@ -1873,20 +1878,18 @@ export default function Home() {
                 colorCodes={undefined}
                 connStatus={wsConnStatus}
               />
-              <Tooltip title="Change name">
+              <Tooltip
+                sx={{
+                  marginLeft: -4,
+                  position: "relative",
+                  left: "30px",
+                }}
+                title="More"
+              >
                 <IconButton
-                  sx={{
-                    marginLeft: -4,
-                    position: "relative",
-                    left: "30px",
-                  }}
                   size="small"
-                  onClick={() => {
-                    setPreference((prev) => ({
-                      ...prev,
-                      name: name || prev.name,
-                    }));
-                    setShowPreferenceDialog(true);
+                  onClick={(event) => {
+                    setMenuAnchorEl(event.currentTarget);
                   }}
                 >
                   <Edit fontSize="small" />
@@ -2020,7 +2023,7 @@ export default function Home() {
             >
               {isMobile && (
                 <IconButton onClick={handleDrawerToggle}>
-                  <Menu />
+                  <MenuIcon />
                 </IconButton>
               )}
               <RenderAvatar
@@ -2194,7 +2197,7 @@ export default function Home() {
                 }}
               >
                 <IconButton onClick={handleDrawerToggle}>
-                  <Menu />
+                  <MenuIcon />
                 </IconButton>
               </Paper>
             )}
@@ -2234,6 +2237,37 @@ export default function Home() {
           });
         }}
       />
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={menuOpen}
+        onClose={handleCloseMenu}
+        slotProps={{
+          list: {
+            "aria-labelledby": "basic-button",
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            setPreference((prev) => ({
+              ...prev,
+              name: name || prev.name,
+            }));
+            setShowPreferenceDialog(true);
+            handleCloseMenu();
+          }}
+        >
+          Preference
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleLogout();
+            handleCloseMenu();
+          }}
+        >
+          Logout
+        </MenuItem>
+      </Menu>
     </Fragment>
   );
 }
