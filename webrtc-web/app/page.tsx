@@ -1530,7 +1530,7 @@ export default function Home() {
   const selectedserverObject = servers?.find(
     (server) => server.id === selectedServerId,
   );
-  const { loggedIn, loggedInAs,clearLoggedInState } = useLoginStatusPolling(
+  const { loggedIn, loggedInAs, clearLoggedInState } = useLoginStatusPolling(
     selectedserverObject?.apiPrefix || "",
     3000,
   );
@@ -1841,7 +1841,8 @@ export default function Home() {
   const handleLogout = () => {
     logout(selectedserverObject?.apiPrefix || "");
     setPinnedServer("");
-    clearLoggedInState()
+    clearLoggedInState();
+    window.location.reload();
   };
 
   const drawerContent = (
