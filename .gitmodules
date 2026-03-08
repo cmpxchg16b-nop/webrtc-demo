@@ -1,3 +1,6 @@
 [submodule "coturn-deploy/coturn"]
 	path = coturn-deploy/coturn
 	url = https://github.com/coturn/coturn.git
+[submodule "cfssl"]
+	path = cfssl
+	url = https://github.com/cloudflare/cfssl.git

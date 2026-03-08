@@ -141,6 +141,24 @@ function useWs(
     });
 
   const allWsConnsRef = useRef<WSConnRecord[]>([]);
+  const doCleanAll = () => {
+    console.log("Cleanning up all websocket connections");
+    const conns = allWsConnsRef.current;
+    allWsConnsRef.current = [];
+    for (const conn of conns) {
+      conn.shouldReconnect = false;
+      if (conn.ws) {
+        if (
+          conn.ws.readyState === conn.ws.CLOSED ||
+          conn.ws.readyState === conn.ws.CLOSING
+        ) {
+          continue;
+        }
+        conn.ws.close();
+        console.log(`Clean up ${conn.ws} of server ${conn.serverId}`);
+      }
+    }
+  };
 
   const sendWsMsg = (obj: any) => {
     try {
@@ -215,7 +233,7 @@ function useWs(
           },
         },
       };
-      ws.send(JSON.stringify(registerMsg));
+      sendWsMsg(registerMsg);
 
       pingTimerRef.current = setupWsPing(
         pingIntvMs,
@@ -482,23 +500,13 @@ function useWs(
           return;
         }
         // clean up all irrelevant connections
-        const conns = allWsConnsRef.current;
-        allWsConnsRef.current = [];
-        for (const conn of conns) {
-          conn.shouldReconnect = false;
-          if (conn.ws) {
-            if (
-              conn.ws.readyState === conn.ws.CLOSED ||
-              conn.ws.readyState === conn.ws.CLOSING
-            ) {
-              continue;
-            }
-            conn.ws.close();
-            console.log(`Clean up ${conn.ws} of server ${conn.serverId}`);
-          }
-        }
+        doCleanAll();
         timers.push(setTimeout(() => doConnect(pinnedSrv)));
       }
+    } else if (!pinnedServerId) {
+      // Note: a logout operation might zero-set pinnedServerId
+      console.log("Pinned server gets cleared, cleaning up ws connection(s)");
+      doCleanAll();
     }
   }, [servers, selectedServerId, pinnedServerId, loggedIn]);
 
@@ -1523,7 +1531,11 @@ export default function Home() {
 
   const { getValue: getCurrentServer, setValue: setSelectedServer } =
     usePersistentStorage(PSKey.CurrentServer);
+  // selectedServerId indicates the server that is currently active in the select box
+  // the user might just selected a server, but didn't click the 'connect' button, so
+  // the selectedServer might not necessarily be the pinnedSrv in the meantime
   const selectedServerId = getCurrentServer() || "";
+  // pinnedSrv indicates which server the user decided to connect to
   const pinnedSrvSt = usePersistentStorage(PSKey.PinnedServer);
   const pinnedServer = pinnedSrvSt.getValue() || "";
   const setPinnedServer = (s: string) => pinnedSrvSt.setValue(s);
