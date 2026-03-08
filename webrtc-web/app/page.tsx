@@ -147,6 +147,26 @@ function useWs(
 
   const allWsConnsRef = useRef<WSConnRecord[]>([]);
 
+  const sendWsMsg = (obj: any) => {
+    try {
+      let j = "";
+      if (typeof obj === "string") {
+        j = obj;
+      } else {
+        j = JSON.stringify(obj);
+      }
+      if (!j) {
+        return;
+      }
+      wsRef.current?.send(j);
+      if (!wsRef.current) {
+        console.error("object msg", obj, "didn't send");
+      }
+    } catch (e) {
+      console.error("Failed to marshal object to JSON:", e, obj);
+    }
+  };
+
   const doConnect = (server: WSServer) => {
     if (allWsConnsRef.current.find((rec) => rec.serverId === server.id)) {
       console.log(
@@ -154,6 +174,7 @@ function useWs(
       );
       return;
     }
+    console.log("Connecting to ", server);
 
     const addr = appendWsPathToCurrentOrigin(server.url);
     const iceServers = server.iceServers;
@@ -283,7 +304,7 @@ function useWs(
               setConnTrackStatus,
               remoteNodeId,
               nodeIdRef,
-              wsRef,
+              sendWsMsg,
               logSource,
               audioCtxRef,
               connTrackRef,
@@ -495,9 +516,9 @@ function useWs(
     conns,
     connected,
     connecting,
-    wsRef,
     connTrackRef,
     wsConnStatus,
+    sendWsMsg,
   };
 }
 
@@ -890,7 +911,7 @@ function attachPeerConnectionEventListeners(
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
   remoteNodeId: string,
   nodeIdRef: RefObject<string>,
-  wsRef: RefObject<WebSocket | null>,
+  sendWsMsg: (obj: any) => void,
   logId: string | undefined,
   audioCtxRef: RefObject<AudioContext | null>,
   connTrackRef: RefObject<ConnTrack>,
@@ -1014,7 +1035,7 @@ function attachPeerConnectionEventListeners(
             const offerMsg: MessagePayload = {
               sdp_offer: offerPayload,
             };
-            wsRef.current?.send(JSON.stringify(offerMsg));
+            sendWsMsg(offerMsg);
           })
           .catch((e) => {
             console.error(
@@ -1041,7 +1062,7 @@ function attachPeerConnectionEventListeners(
       const iceOfferMsg: MessagePayload = {
         ice_offer: iceOfferPayload,
       };
-      wsRef.current?.send(JSON.stringify(iceOfferMsg));
+      sendWsMsg(iceOfferMsg);
     } else {
       // If event.candidate is null, it means the browser
       // has finished gathering all possible candidates.
@@ -1454,7 +1475,7 @@ function getPeerUnreadMsgs(
 
 function createAndSendOffer(
   pc: RTCPeerConnection,
-  wsRef: RefObject<WebSocket | null>,
+  sendWsMsg: (obj: any) => void,
   localNodeId: string,
   remoteNodeId: string,
   logSource: string = "",
@@ -1463,9 +1484,6 @@ function createAndSendOffer(
     .createOffer()
     .then((offer) => pc.setLocalDescription(offer))
     .then(() => {
-      if (wsRef.current?.readyState !== WebSocket.OPEN) {
-        throw new Error("WebSocket not connected");
-      }
       const offerPayload: SDPOfferPayload = {
         type: OfferType.Offer,
         offer_json: JSON.stringify(pc.localDescription),
@@ -1475,7 +1493,7 @@ function createAndSendOffer(
       const offerMsg: MessagePayload = {
         sdp_offer: offerPayload,
       };
-      wsRef.current.send(JSON.stringify(offerMsg));
+      sendWsMsg(offerMsg);
       console.log(`[dbg]${logSource} SDP offer sent to peer`, remoteNodeId);
     })
     .catch((err) => {
@@ -1532,11 +1550,9 @@ export default function Home() {
     nodeId,
     nodeIdRef,
     conns,
-    connected,
-    connecting,
-    wsRef,
     connTrackRef,
     wsConnStatus,
+    sendWsMsg,
   } = useWs(
     setConnTrackStatus,
     setMsgPatches,
@@ -1580,7 +1596,7 @@ export default function Home() {
         setConnTrackStatus,
         remoteNodeId,
         nodeIdRef,
-        wsRef,
+        sendWsMsg,
         logSource,
         audioCtxRef,
         connTrackRef,
@@ -1630,7 +1646,7 @@ export default function Home() {
 
       createAndSendOffer(
         ent.peerConnection,
-        wsRef,
+        sendWsMsg,
         nodeIdRef.current,
         remoteNodeId,
       ).catch((e) => {
@@ -1826,7 +1842,7 @@ export default function Home() {
 
   const drawerContent = (
     <Fragment>
-      {selectedserverObject ? (
+      {selectedserverObject && pinnedServer ? (
         <Box>
           <Box
             sx={{
@@ -1947,7 +1963,7 @@ export default function Home() {
         </Box>
       ) : (
         <ServerSelector
-          connecting={connecting}
+          connecting={wsConnStatus === WSConnStatusShort.Connecting}
           preferName={preference.name}
           onPreferNameChange={(n) => {
             setPreference((prev) => ({ ...prev, name: n }));
@@ -2211,7 +2227,7 @@ export default function Home() {
             const renameMsg: MessagePayload = {
               rename: renamePayload,
             };
-            wsRef.current?.send(JSON.stringify(renameMsg));
+            sendWsMsg(renameMsg);
 
             resolve();
             setShowPreferenceDialog(false);
