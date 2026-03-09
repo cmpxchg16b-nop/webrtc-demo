@@ -1,24 +1,30 @@
-name: local-webrtc-chat
+name: webrtc-chat
 networks:
-  local-webrtc-chat:
-    name: "local-webrtc-chat"
+  webrtc-chat:
+    name: "webrtc-chat"
     driver: bridge
     enable_ipv4: false
     enable_ipv6: true
-    ipam:
-      config:
-        - subnet: ${RFC5375_RANDOMIZED_ULA}
-volumes:
-  static:
-    local-webrtc-chat-static:
-      name: "local-webrtc-chat-static"
 services:
+  stun:
+    container_name: webrtc-stun
+    image: webrtc-stun:latest
+    pull_policy: never
+    networks:
+      - "webrtc-chat"
+  server:
+    container_name: webrtc-server
+    hostname: webrtc-server
+    image: webrtc-server:latest
+    pull_policy: never
+    networks:
+      - "webrtc-chat"
   web:
-    container_name: local-webrtc-chat
-    image: nginx:latest
-    pull_policy: always
+    container_name: webrtc-web
+    hostname: ${MAIN_HOSTNAME}
+    image: webrtc-chat:latest
+    pull_policy: never
     volumes:
       - "./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro"
-      - "local-webrtc-chat-static:/usr/share/nginx/html:ro"
     networks:
-      - "local-webrtc-chat"
+      - "webrtc-chat"

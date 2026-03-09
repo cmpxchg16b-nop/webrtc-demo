@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 
 export interface UsePersistentStorageReturn {
@@ -9,12 +11,20 @@ export function usePersistentStorage(
   key: PSKey | string,
 ): UsePersistentStorageReturn {
   const [state, setState] = useState<string | undefined>(undefined);
+  if (typeof window === "undefined") {
+    return {
+      getValue() {
+        return "";
+      },
+      setValue(v: string) {},
+    };
+  }
   return {
     getValue() {
-      return localStorage?.getItem(key) ?? state ?? "";
+      return window.localStorage?.getItem(key) ?? state ?? "";
     },
     setValue(value: string) {
-      localStorage?.setItem(key, value);
+      window.localStorage?.setItem(key, value);
       setState(value);
     },
   };
