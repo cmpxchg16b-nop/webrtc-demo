@@ -24,6 +24,8 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - PIXELFLUX_WAYLAND=true
+      - CUSTOM_USER=${WEBTOP_USER}
+      - PASSWORD=${WEBTOP_PASSWD}
     networks:
       - webrtc-chat
     volumes:
@@ -44,6 +46,8 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - PIXELFLUX_WAYLAND=true
+      - CUSTOM_USER=${WEBTOP_USER}
+      - PASSWORD=${WEBTOP_PASSWD}
     networks:
       - webrtc-chat
     volumes:
