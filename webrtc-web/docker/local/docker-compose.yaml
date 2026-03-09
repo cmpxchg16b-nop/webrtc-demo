@@ -1,26 +1,17 @@
 name: webrtc-chat
 networks:
-  # use for communication between web-proxy and backend server
-  webrtc-internal:
-    name: "webrtc-internal"
-    driver: bridge
-    enable_ipv4: false
-    enable_ipv6: true
-  # use for communication between client-1 and web-proxy
-  webrtc-client-1:
-    name: "webrtc-client-1"
-    driver: bridge
-    enable_ipv4: false
-    enable_ipv6: true
-  # use for communication between client-2 and web-proxy
-  webrtc-client-2:
-    name: "webrtc-client-2"
-    driver: bridge
-    enable_ipv4: false
-    enable_ipv6: true
-  # use for communication between client-3 (agents) and web-proxy
-  webrtc-client-3:
-    name: "webrtc-client-3"
+  # Note: for demonstration puposes,
+  # better put all these into same docker network, for:
+  # 1. automatic dns discovery
+  # 2. connectivity
+  # although, the docker host could, in theory, forward packets
+  # between subnets, however it doesn't, unless you
+  # inject firewall bypass rule `iptables -t filter -I DOCKER_USER -j ACCEPT` to system iptables of the host
+  # and enable ip (and ipv6) forwarding.
+  # so, for simplicity, we won't alter linux host network settings,
+  # we just put them in the same docker network.
+  webrtc-chat:
+    name: "webrtc-chat"
     driver: bridge
     enable_ipv4: false
     enable_ipv6: true
@@ -34,8 +25,7 @@ services:
       - TZ=Etc/UTC
       - PIXELFLUX_WAYLAND=true
     networks:
-      - webrtc-client-1
-      - webrtc-client-3
+      - webrtc-chat
     volumes:
       - "./webtop-config1:/config"
       # - "./resolv.conf:/etc/resolv.conf"
@@ -55,8 +45,7 @@ services:
       - TZ=Etc/UTC
       - PIXELFLUX_WAYLAND=true
     networks:
-      - webrtc-client-2
-      - webrtc-client-3
+      - webrtc-chat
     volumes:
       - "./webtop-config2:/config"
       # - "./resolv.conf:/etc/resolv.conf"
@@ -73,9 +62,7 @@ services:
     image: coturn/coturn:latest
     pull_policy: never
     networks:
-      - "webrtc-client-1"
-      - "webrtc-client-2"
-      - "webrtc-client-3"
+      - webrtc-chat
 
   agents:
     container_name: webrtc-agents
@@ -85,7 +72,7 @@ services:
       dockerfile: "webrtc-agents/Dockerfile"
     pull_policy: never
     networks:
-      - "webrtc-client-3"
+      - webrtc-chat
     volumes:
       - "./custom-ca/ca.pem:/custom-ca/ca.pem:ro"
       - "./.env:/app/.env:ro"
@@ -118,7 +105,7 @@ services:
       - "--kioubit-login-pubkey=./kioubit-login-pubkey.pem"
       - "--debug=true"
     networks:
-      - "webrtc-internal"
+      - webrtc-chat
   web:
     container_name: webrtc-web
     hostname: ${MAIN_DOMAIN}
@@ -130,7 +117,4 @@ services:
       - "./cert.pem:/etc/nginx/certs/cert.pem:ro"
       - "./cert-key.pem:/etc/nginx/certs/cert-key.pem:ro"
     networks:
-      - "webrtc-internal"
-      - "webrtc-client-1"
-      - "webrtc-client-2"
-      - "webrtc-client-3"
+      - webrtc-chat
