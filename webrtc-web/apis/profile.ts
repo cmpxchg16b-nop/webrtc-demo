@@ -3,8 +3,14 @@ import { DataURL, Profile, ProfileStatus } from "./types";
 import { PSKey, usePersistentStorage } from "./persistent";
 import { paintFirstLetterAvatar } from "./colors";
 
-export function getProfile(apiPrefix: string) {
-  return fetch(`${apiPrefix}/profile`)
+export function getProfile(apiPrefix: string, forUsername?: string) {
+  const query = new URLSearchParams();
+  let suffix = "";
+  if (forUsername) {
+    query.set("username", forUsername);
+    suffix = `?${query.toString()}`;
+  }
+  return fetch(`${apiPrefix}/profile${suffix}`)
     .then((r) => r.json())
     .then((r) => r as Profile);
 }

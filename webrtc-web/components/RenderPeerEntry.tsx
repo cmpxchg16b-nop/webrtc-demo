@@ -3,6 +3,7 @@
 import { ChatMessage, ChatMessageFileCategory, ConnEntry } from "@/apis/types";
 import { Badge, Box, MenuItem, Typography } from "@mui/material";
 import { RenderAvatar } from "./RenderAvatar";
+import { ShowDisplayName } from "./ShowDisplayName";
 
 function getMessagePreviewThumbnail(msgCat: ChatMessageFileCategory): string {
   if (msgCat === ChatMessageFileCategory.Image) {
@@ -40,6 +41,7 @@ export function RenderPeerEntry(props: {
   onSelect: () => void;
   latestUnreadMessage?: ChatMessage;
   numUnreads?: number;
+  apiPrefix: string | undefined;
 }) {
   const {
     conn,
@@ -48,6 +50,7 @@ export function RenderPeerEntry(props: {
     latestUnreadMessage,
     numUnreads,
     preferredColorIdx,
+    apiPrefix,
   } = props;
   const hasUnreads = numUnreads !== undefined && numUnreads > 0;
 
@@ -84,7 +87,10 @@ export function RenderPeerEntry(props: {
             noWrap
             sx={{ fontWeight: hasUnreads ? "bold" : "normal" }}
           >
-            {conn.entry?.node_name || conn.node_id}
+            <ShowDisplayName
+              username={conn.entry?.node_name}
+              apiPrefix={apiPrefix || ""}
+            />
           </Typography>
           {hasUnreads && latestUnreadMessage && (
             <Typography

@@ -85,6 +85,7 @@ import { useQuery } from "@tanstack/react-query";
 import { logout } from "@/apis/logout";
 import { usePreference } from "@/apis/preference";
 import { FormatRTT } from "@/components/FormatRTT";
+import { ShowDisplayName } from "@/components/ShowDisplayName";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -1913,6 +1914,7 @@ export default function Home() {
               )[0];
               return (
                 <RenderPeerEntry
+                  apiPrefix={pinnedserverObject?.apiPrefix}
                   preferredColorIdx={preferredColorIdx}
                   conn={conn}
                   key={conn.node_id}
@@ -1979,7 +1981,12 @@ export default function Home() {
               userPreferenceMap[activeConn]?.indexOfPreferColor
             }
           />
-          <Box>{userPreferenceMap[activeConn]?.name ?? ""}</Box>
+          <Box>
+            <ShowDisplayName
+              username={userPreferenceMap[activeConn]?.name ?? ""}
+              apiPrefix={pinnedserverObject?.apiPrefix || ""}
+            />
+          </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <ConnStatusDisplay
               connStatus={convertRTCPeerConnStatus(
