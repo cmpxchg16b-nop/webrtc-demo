@@ -110,12 +110,7 @@ function useWs(
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
   setMsgPatches: Dispatch<SetStateAction<MessagePatchesMap>>,
   audioCtxRef: RefObject<AudioContext | null>,
-  servers: WSServer[],
-  pinnedServerId: string,
-  loggedIn: boolean | undefined,
 ) {
-  const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const correlationId = useMemo(() => crypto.randomUUID(), []);
   const { addUnreadMessageIds } = useUnreads();
@@ -140,24 +135,6 @@ function useWs(
     });
 
   const allWsConnsRef = useRef<WSConnRecord[]>([]);
-  const doCleanAll = () => {
-    console.log("Cleanning up all websocket connections");
-    const conns = allWsConnsRef.current;
-    allWsConnsRef.current = [];
-    for (const conn of conns) {
-      conn.shouldReconnect = false;
-      if (conn.ws) {
-        if (
-          conn.ws.readyState === conn.ws.CLOSED ||
-          conn.ws.readyState === conn.ws.CLOSING
-        ) {
-          continue;
-        }
-        conn.ws.close();
-        console.log(`Clean up ${conn.ws} of server ${conn.serverId}`);
-      }
-    }
-  };
 
   const sendWsMsg = (obj: any) => {
     try {
@@ -179,7 +156,7 @@ function useWs(
     }
   };
 
-  const doConnect = (server: WSServer) => {
+  const connect = (server: WSServer, preference: Preference | undefined) => {
     if (allWsConnsRef.current.find((rec) => rec.serverId === server.id)) {
       console.log(
         `Server ${server.id} already has connection record, skipping for singleton.`,
@@ -191,14 +168,11 @@ function useWs(
     const addr = appendWsPathToCurrentOrigin(server.url);
     const iceServers = server.iceServers;
 
-    setConnecting(true);
     setWSConnStatus(WSConnStatusShort.Connecting);
     const ws = new WebSocket(addr);
     wsRef.current = ws;
 
     const cleanUp = () => {
-      setConnected(false);
-      setConnecting(false);
       setConns([]);
       if (pingTimerRef.current !== null && pingTimerRef.current !== undefined) {
         clearInterval(pingTimerRef.current);
@@ -208,27 +182,25 @@ function useWs(
       nodeIdRef.current = "";
       setNodeId("");
     };
-    const record: WSConnRecord = {
-      serverId: server.id,
-      ws: ws,
-      shouldReconnect: true,
-    };
-    allWsConnsRef.current.push(record);
+
     const logSource = "acceptor";
 
     ws.onopen = () => {
       setWSConnStatus(WSConnStatusShort.Online);
       connectedAtRef.current = Date.now();
-      setConnected(true);
-      setConnecting(false);
       const registerPayload: RegisterPayload = {
-        node_name: "",
+        node_name: preference?.name ?? "",
       };
       const registerMsg: MessagePayload = {
         register: registerPayload,
         attributes_announcement: {
           attributes: {
             [WellKnownAttributes.SupportAttachment]: "true",
+            [WellKnownAttributes.PreferredColor]:
+              preference?.indexOfPreferColor !== undefined &&
+              preference.indexOfPreferColor !== null
+                ? String(preference.indexOfPreferColor)
+                : undefined,
           },
         },
       };
@@ -246,13 +218,11 @@ function useWs(
       setWSConnStatus(WSConnStatusShort.Offline);
       cleanUp();
 
-      if (record.shouldReconnect) {
+      const shouldReconnect = !!wsRef.current;
+      if (shouldReconnect) {
         console.log("Disconnected, will reconnect later");
         setTimeout(() => {
-          allWsConnsRef.current = allWsConnsRef.current.filter(
-            (x) => x.serverId !== server.id,
-          );
-          doConnect(server);
+          connect(server, preference);
         }, 3000);
       }
     };
@@ -483,29 +453,18 @@ function useWs(
     };
   };
 
-  useEffect(() => {
-    const pinnedSrv = servers.find((s) => s.id === pinnedServerId);
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    if (pinnedSrv) {
-      // should connect now
-      const readyToConnect = loggedIn || !pinnedSrv.allowAnonymous;
-      if (readyToConnect) {
-        if (
-          allWsConnsRef.current.find((rec) => rec.serverId === pinnedServerId)
-        ) {
-          // already have connection
-          return;
-        }
-        // clean up all irrelevant connections
-        doCleanAll();
-        timers.push(setTimeout(() => doConnect(pinnedSrv)));
+  const disconnect = () => {
+    if (wsRef.current) {
+      const ws = wsRef.current;
+      // set the current value of the ref to null to disable auto-reconnect
+      wsRef.current = null;
+      try {
+        ws.close?.();
+      } catch (e) {
+        console.error("failed to close ws:", e);
       }
-    } else if (!pinnedServerId) {
-      // Note: a logout operation might zero-set pinnedServerId
-      console.log("Pinned server gets cleared, cleaning up ws connection(s)");
-      doCleanAll();
     }
-  }, [servers, pinnedServerId, loggedIn]);
+  };
 
   return {
     rtt,
@@ -514,11 +473,11 @@ function useWs(
     nodeId,
     nodeIdRef,
     conns,
-    connected,
-    connecting,
     connTrackRef,
     wsConnStatus,
     sendWsMsg,
+    connect,
+    disconnect,
   };
 }
 
@@ -1564,14 +1523,9 @@ export default function Home() {
     connTrackRef,
     wsConnStatus,
     sendWsMsg,
-  } = useWs(
-    setConnTrackStatus,
-    setMsgPatches,
-    audioCtxRef,
-    servers,
-    pinnedServer,
-    loggedIn,
-  );
+    connect,
+    disconnect,
+  } = useWs(setConnTrackStatus, setMsgPatches, audioCtxRef);
 
   const name = conns
     ? conns.find((conn) => conn.node_id === nodeId)?.entry?.node_name
@@ -1860,7 +1814,7 @@ export default function Home() {
     logout(selectedserverObject?.apiPrefix || "");
     setPinnedServer("");
     clearLoggedInState();
-    window.location.reload();
+    disconnect();
   };
 
   const drawerContent = (
@@ -1983,8 +1937,9 @@ export default function Home() {
           connecting={wsConnStatus === WSConnStatusShort.Connecting}
           preference={preference}
           onPreferenceChange={setPreference}
-          onPinnedServerChange={(serverId) => {
-            setPinnedServer(serverId);
+          onPinServer={(pinnedServer, preference) => {
+            setPinnedServer(pinnedServer.id);
+            connect(pinnedServer, preference);
           }}
           servers={servers}
         />

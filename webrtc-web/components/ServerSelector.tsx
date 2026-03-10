@@ -24,7 +24,7 @@ import { PSKey, usePersistentStorage } from "@/apis/persistent";
 // Select what signalling server to use
 export function ServerSelector(props: {
   servers: WSServer[];
-  onPinnedServerChange: (serverId: string) => void;
+  onPinServer: (server: WSServer, preference: Preference | undefined) => void;
   connecting: boolean;
   onLogout: () => void;
   preference: Preference;
@@ -35,7 +35,7 @@ export function ServerSelector(props: {
     preference,
     onPreferenceChange,
     connecting,
-    onPinnedServerChange,
+    onPinServer,
     onLogout,
   } = props;
 
@@ -63,7 +63,7 @@ export function ServerSelector(props: {
     const server = servers.find((server) => server.id === selectedServerId);
     if (server) {
       // the app will automatically tries to connect to a pinned server
-      onPinnedServerChange(server.id);
+      onPinServer(server, preference);
     }
   };
 
