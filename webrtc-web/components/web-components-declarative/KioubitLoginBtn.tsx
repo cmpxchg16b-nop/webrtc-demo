@@ -10,7 +10,7 @@ export function KioubitLogin(props: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={authCSS["kioubit-btn-dark"]}
+      className={`${authCSS["kioubit-btn-dark"]} ${authCSS["fullwidth"]} ${authCSS["justifycenter"]}`}
       part="button"
     >
       <Image

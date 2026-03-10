@@ -98,36 +98,42 @@ export function ServerSelector(props: {
   return (
     <Box
       sx={{
+        padding: 1,
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         height: "100%",
+        gap: 2,
       }}
     >
       <Box
         sx={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: 1,
-          rowGap: 2,
+          display: "flex",
           alignItems: "center",
-          padding: 2,
+          flexWrap: "wrap",
+          rowGap: 0,
+          columnGap: 2,
         }}
       >
-        <Box sx={{ justifySelf: "right" }}>{!isMobile && "Server"}</Box>
-        <Select
-          variant="standard"
-          label="Server"
-          value={selectedServerId}
-          onChange={(e) => setSelectedServer(e.target.value)}
-        >
-          {servers.map((server) => (
-            <MenuItem key={server.id} value={server.id}>
-              {server.name}
-            </MenuItem>
-          ))}
-        </Select>
+        {!isMobile && <Box>{"Server:"}</Box>}
+        <Box sx={{ flex: "1" }}>
+          <Select
+            fullWidth
+            variant="standard"
+            label="Server"
+            value={selectedServerId}
+            onChange={(e) => setSelectedServer(e.target.value)}
+          >
+            {servers.map((server) => (
+              <MenuItem key={server.id} value={server.id}>
+                {server.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      </Box>
 
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {isLoginStatusLoading ? (
           <Box>Fetching login status ...</Box>
         ) : profileStatusData?.logged_in ? (
@@ -135,13 +141,13 @@ export function ServerSelector(props: {
             <Box>{hintText}</Box>
             <Box>{connectBtn}</Box>
             <Box>
-              <Button fullWidth onClick={onLogout}>
+              <Button variant="outlined" fullWidth onClick={onLogout}>
                 Logout
               </Button>
             </Box>
           </Fragment>
         ) : (
-          <Fragment>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {idps.map((idp) => (
               <IdPLoginButton
                 key={idp.name}
@@ -149,46 +155,52 @@ export function ServerSelector(props: {
                 onClick={() => handleLoginClick(idp)}
               />
             ))}
-          </Fragment>
-        )}
-
-        {selectedServerObj?.allowAnonymous && (
-          <Box sx={{ paddingTop: 2 }}>
-            <Divider orientation="horizontal" />
-            <Box>Or, Connect as a visitor:</Box>
-            <TextField
-              fullWidth
-              variant="standard"
-              value={preference?.name ?? ""}
-              onChange={(e) =>
-                onPreferenceChange((prev) => {
-                  return {
-                    ...prev,
-                    name: e.target.value,
-                  };
-                })
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleConnect();
-                }
-              }}
-            />
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                marginTop: "2",
-                gridColumn: "1 / span 2",
-              }}
-            >
-              {connectBtn}
-            </Box>
           </Box>
         )}
       </Box>
+
+      {selectedServerObj?.allowAnonymous && !profileStatusData?.logged_in && (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <Box>Or, Connect as a visitor:</Box>
+          <TextField
+            placeholder="Pick a username"
+            fullWidth
+            variant="standard"
+            value={preference?.name ?? ""}
+            onChange={(e) =>
+              onPreferenceChange((prev) => {
+                return {
+                  ...prev,
+                  name: e.target.value,
+                };
+              })
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                handleConnect();
+              }
+            }}
+          />
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "2",
+              gridColumn: "1 / span 2",
+            }}
+          >
+            {connectBtn}
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }

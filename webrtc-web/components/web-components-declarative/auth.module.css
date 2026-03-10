@@ -1,3 +1,9 @@
+.fullwidth {
+    width: 100%;
+}
+.justifycenter {
+    justify-content: center;
+}
 .kioubit-btn-dark,
 .kioubit-btn-light {
     font-weight: 400;

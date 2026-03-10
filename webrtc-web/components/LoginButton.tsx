@@ -1,7 +1,7 @@
 import { IAPKind, IDProvider } from "@/apis/types";
 import { Button } from "@mui/material";
 import { KioubitLogin } from "./web-components-declarative/KioubitLoginBtn";
-import GithubIcon from "@mui/icons-material/github";
+import GithubIcon from "@mui/icons-material/GitHub";
 
 export function IdPLoginButton(props: {
   idpContext: IDProvider;
@@ -14,7 +14,12 @@ export function IdPLoginButton(props: {
       return <KioubitLogin onClick={onClick} />;
     case IAPKind.Github:
       return (
-        <Button onClick={onClick} startIcon={<GithubIcon />}>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={onClick}
+          startIcon={<GithubIcon />}
+        >
           Sign in with Github
         </Button>
       );
