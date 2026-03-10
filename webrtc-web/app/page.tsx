@@ -78,6 +78,7 @@ import { ConnStatusDisplay } from "@/components/ConnStatusDisplay";
 import { useLoginStatusPolling } from "@/apis/profile";
 import { useQuery } from "@tanstack/react-query";
 import { logout } from "@/apis/logout";
+import { usePreference } from "@/apis/preference";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -111,7 +112,6 @@ function useWs(
   audioCtxRef: RefObject<AudioContext | null>,
   servers: WSServer[],
   pinnedServerId: string,
-  selectedServerId: string,
   loggedIn: boolean | undefined,
 ) {
   const [connected, setConnected] = useState(false);
@@ -484,12 +484,11 @@ function useWs(
   };
 
   useEffect(() => {
-    const selectedSrv = servers.find((s) => s.id === selectedServerId);
     const pinnedSrv = servers.find((s) => s.id === pinnedServerId);
     const timers: ReturnType<typeof setTimeout>[] = [];
-    if (pinnedServerId === selectedServerId && selectedSrv && pinnedSrv) {
+    if (pinnedSrv) {
       // should connect now
-      const readyToConnect = loggedIn || !selectedSrv.iap;
+      const readyToConnect = loggedIn || !pinnedSrv.allowAnonymous;
       if (readyToConnect) {
         if (
           allWsConnsRef.current.find((rec) => rec.serverId === pinnedServerId)
@@ -506,7 +505,7 @@ function useWs(
       console.log("Pinned server gets cleared, cleaning up ws connection(s)");
       doCleanAll();
     }
-  }, [servers, selectedServerId, pinnedServerId, loggedIn]);
+  }, [servers, pinnedServerId, loggedIn]);
 
   return {
     rtt,
@@ -1543,19 +1542,13 @@ export default function Home() {
     queryFn: () => getSignallingServers(),
   });
 
-  const { getValue: getCurrentServer, setValue: setSelectedServer } =
-    usePersistentStorage(PSKey.CurrentServer);
-  // selectedServerId indicates the server that is currently active in the select box
-  // the user might just selected a server, but didn't click the 'connect' button, so
-  // the selectedServer might not necessarily be the pinnedSrv in the meantime
-  const selectedServerId = getCurrentServer() || "";
-  // pinnedSrv indicates which server the user decided to connect to
   const pinnedSrvSt = usePersistentStorage(PSKey.PinnedServer);
   const pinnedServer = pinnedSrvSt.getValue() || "";
   const setPinnedServer = (s: string) => pinnedSrvSt.setValue(s);
-  const selectedserverObject = servers?.find(
-    (server) => server.id === selectedServerId,
+  const pinnedserverObject = servers?.find(
+    (server) => server.id === pinnedServer,
   );
+  const selectedserverObject = pinnedserverObject;
   const { loggedIn, loggedInAs, clearLoggedInState } = useLoginStatusPolling(
     selectedserverObject?.apiPrefix || "",
     3000,
@@ -1577,7 +1570,6 @@ export default function Home() {
     audioCtxRef,
     servers,
     pinnedServer,
-    selectedServerId,
     loggedIn,
   );
 
@@ -1585,10 +1577,7 @@ export default function Home() {
     ? conns.find((conn) => conn.node_id === nodeId)?.entry?.node_name
     : undefined;
 
-  const [preference, setPreference] = useState<Preference>({
-    name: "",
-    indexOfPreferColor: -1,
-  });
+  const { preference, setPreference } = usePreference();
   const [activeConn, setActiveConn] = useState("");
   const [showPreferenceDialog, setShowPreferenceDialog] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -1969,13 +1958,10 @@ export default function Home() {
                   activeNodeId={activeConn}
                   onSelect={() => {
                     saveScrollTop(activeConn, msgsBoxRef);
-                    const server = servers.find(
-                      (server) => server.id === selectedServerId,
-                    );
-                    if (server) {
+                    if (selectedserverObject) {
                       switchActiveConn(
                         conn.node_id,
-                        server.iceServers,
+                        selectedserverObject.iceServers,
                         (msgIds) =>
                           addUnreadMessageIds(nodeIdRef.current, msgIds),
                       );
@@ -1993,19 +1979,14 @@ export default function Home() {
         </Box>
       ) : (
         <ServerSelector
+          onLogout={handleLogout}
           connecting={wsConnStatus === WSConnStatusShort.Connecting}
-          preferName={preference.name}
-          onPreferNameChange={(n) => {
-            setPreference((prev) => ({ ...prev, name: n }));
-          }}
+          preference={preference}
+          onPreferenceChange={setPreference}
           onPinnedServerChange={(serverId) => {
             setPinnedServer(serverId);
           }}
-          selectedServer={selectedServerId}
-          onSelectedServerChange={(serverId) => setSelectedServer(serverId)}
           servers={servers}
-          loggedIn={loggedIn}
-          loggedInAs={loggedInAs}
         />
       )}
     </Fragment>
@@ -2028,7 +2009,7 @@ export default function Home() {
         </IconButton>
       )}
       <RenderAvatar
-        username={activeConn ? userPreferenceMap[activeConn]?.name : ""}
+        username={activeConn ? (userPreferenceMap[activeConn]?.name ?? "") : ""}
         size="small"
         preferredColorIdx={
           userPreferenceMap[activeConn]?.indexOfPreferColor ?? -1

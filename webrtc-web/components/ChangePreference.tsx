@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { Preference } from "@/apis/types";
 import { ColorToken, PRESET_COLORS } from "@/apis/colors";
-import { Dispatch, SetStateAction, useState } from "react";
+import { Dispatch, Fragment, SetStateAction, useState } from "react";
 
 function roundN(i: number, N: number): number {
   return (i + N) % N;
@@ -46,6 +46,47 @@ export function getPreferredColor(
   tokens: ColorToken[] = PRESET_COLORS,
 ): ColorToken {
   return tokens[getRealColorTokenIdx(idx, tokens)];
+}
+
+export function PreferredColorPicker(props: {
+  indexOfPreferColor: number;
+  onColorChange: (i: number) => void;
+}) {
+  const { indexOfPreferColor, onColorChange } = props;
+  return (
+    <Fragment>
+      <Typography
+        variant="subtitle2"
+        color="text.secondary"
+        sx={{ marginBottom: 1 }}
+      >
+        Color
+      </Typography>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+        {PRESET_COLORS.map((colorToken, index) => (
+          <Box
+            key={index}
+            onClick={() => onColorChange(index)}
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "transform 0.1s ease-in-out",
+              transform: "rotate(45deg)",
+              background: `linear-gradient(to right, ${colorToken.light} 50%, ${colorToken.dark} 50%)`,
+              outline: indexOfPreferColor === index ? "3px solid" : "none",
+              outlineColor:
+                indexOfPreferColor === index ? "primary.main" : "transparent",
+            }}
+          ></Box>
+        ))}
+      </Box>
+    </Fragment>
+  );
 }
 
 export function ChangePreference(props: {
@@ -84,38 +125,10 @@ export function ChangePreference(props: {
           }}
         />
         <Box sx={{ marginTop: 2 }}>
-          <Typography
-            variant="subtitle2"
-            color="text.secondary"
-            sx={{ marginBottom: 1 }}
-          >
-            Color
-          </Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
-            {PRESET_COLORS.map((colorToken, index) => (
-              <Box
-                key={index}
-                onClick={() => onColorChange(index)}
-                sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "transform 0.1s ease-in-out",
-                  transform: "rotate(45deg)",
-                  background: `linear-gradient(to right, ${colorToken.light} 50%, ${colorToken.dark} 50%)`,
-                  outline: indexOfPreferColor === index ? "3px solid" : "none",
-                  outlineColor:
-                    indexOfPreferColor === index
-                      ? "primary.main"
-                      : "transparent",
-                }}
-              ></Box>
-            ))}
-          </Box>
+          <PreferredColorPicker
+            indexOfPreferColor={indexOfPreferColor}
+            onColorChange={onColorChange}
+          />
         </Box>
         <DialogActions sx={{ marginTop: 2 }}>
           <Button

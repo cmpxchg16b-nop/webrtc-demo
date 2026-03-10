@@ -1,6 +1,6 @@
 "use client";
 
-import { Profile, WSServer } from "@/apis/types";
+import { IDProvider, Preference, WSServer } from "@/apis/types";
 import {
   Box,
   TextField,
@@ -9,106 +9,91 @@ import {
   Button,
   useMediaQuery,
   useTheme,
+  Divider,
 } from "@mui/material";
-import { IaPLoginButton } from "./LoginButton";
-import { Fragment, useEffect } from "react";
+import { IdPLoginButton } from "./LoginButton";
+import { Dispatch, Fragment, SetStateAction } from "react";
+import {
+  getLoginStatusHintTxt,
+  getProfile,
+  getProfileStatus,
+} from "@/apis/profile";
+import { useQuery } from "@tanstack/react-query";
 import { PSKey, usePersistentStorage } from "@/apis/persistent";
-import { getLoginStatusHintTxt, useLoginStatusPolling } from "@/apis/profile";
-
-const getNum = (s: string): number | undefined => {
-  try {
-    const x = parseInt(s);
-    if (!Number.isNaN(x) && Number.isFinite(x)) {
-      return x;
-    }
-  } catch (_) {}
-};
-
-const loginTimeoutMs = 60 * 1000;
 
 // Select what signalling server to use
 export function ServerSelector(props: {
   servers: WSServer[];
-  selectedServer: string;
-  onSelectedServerChange: (serverId: string) => void;
   onPinnedServerChange: (serverId: string) => void;
-  preferName: string;
-  onPreferNameChange: (preferName: string) => void;
   connecting: boolean;
-  loggedIn: boolean | undefined;
-  loggedInAs: Profile | undefined;
+  onLogout: () => void;
+  preference: Preference;
+  onPreferenceChange: Dispatch<SetStateAction<Preference>>;
 }) {
   const {
     servers,
-    selectedServer,
-    onSelectedServerChange,
-    preferName,
-    onPreferNameChange,
+    preference,
+    onPreferenceChange,
     connecting,
-    loggedIn,
-    loggedInAs,
     onPinnedServerChange,
+    onLogout,
   } = props;
+
+  const { getValue: getCurrentServer, setValue: setSelectedServer } =
+    usePersistentStorage(PSKey.CurrentServer);
+
+  // selectedServerId indicates the server that is currently active in the select box
+  // the user might just selected a server, but didn't click the 'connect' button, so
+  // the selectedServer might not necessarily be the pinnedSrv in the meantime
+  const selectedServerId = getCurrentServer() || "";
+  // pinnedSrv indicates which server the user decided to connect to
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { getValue: getLoggingIn, setValue: setLoggingIn } =
-    usePersistentStorage(PSKey.LoggingIn);
-  const isLoggingIn = getLoggingIn() === "true";
-
-  const { getValue: getLogInStart, setValue: setLogInStart } =
-    usePersistentStorage(PSKey.LoggingStartedAt);
-
-  const logInStartedAt = getLogInStart() || "";
-
-  useEffect(() => {
-    const loginStartTx = getNum(logInStartedAt);
-    if (loginStartTx === undefined || loginStartTx === null) {
-      return;
-    }
-    const loginTimeoutAt = loginStartTx + loginTimeoutMs;
-    const now = new Date().valueOf();
-    const timeDelta = Math.max(loginTimeoutAt - now, 0);
-    const timeout = setTimeout(() => {
-      setLoggingIn("false");
-      setLogInStart("");
-    }, timeDelta);
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [logInStartedAt]);
-
-  const handleLoginClick = () => {
-    // start polling (also the polling state would also survives page reload)
-    setLoggingIn("true");
-    setLogInStart(new Date().valueOf().toString());
-
-    // navigate the user to the oauth2 authorization portal
-    if (hasIAP && selectedServerObj?.iap?.loginUrl) {
-      window.location.href = selectedServerObj.iap.loginUrl;
-    }
+  const selectedServerObj = servers.find(
+    (server) => server.id === selectedServerId,
+  );
+  const handleLoginClick = (idp: IDProvider) => {
+    // eslint-disable-next-line
+    window.location.href = idp.loginUrl;
   };
 
-  const selectedServerObj = servers.find(
-    (server) => server.id === selectedServer,
-  );
-  const hasIAP = selectedServerObj?.iap && selectedServerObj.iap.loginUrl;
   const handleConnect = () => {
-    const server = servers.find((server) => server.id === selectedServer);
+    const server = servers.find((server) => server.id === selectedServerId);
     if (server) {
-      setLoggingIn("false");
+      // the app will automatically tries to connect to a pinned server
       onPinnedServerChange(server.id);
     }
   };
 
   const connectBtn = (
-    <Button variant="contained" loading={connecting} onClick={handleConnect}>
+    <Button
+      fullWidth
+      variant="contained"
+      loading={connecting}
+      onClick={handleConnect}
+    >
       Connect
     </Button>
   );
+  const { isLoading: isLoginStatusLoading, data: profileStatusData } = useQuery(
+    {
+      queryKey: ["hasloggedin", selectedServerObj?.apiPrefix ?? ""],
+      queryFn: () => getProfileStatus(selectedServerObj?.apiPrefix ?? ""),
+    },
+  );
 
-  const hintText = getLoginStatusHintTxt(loggedIn, loggedInAs);
+  const { data: profileData } = useQuery({
+    queryKey: ["profile", selectedServerObj?.apiPrefix ?? ""],
+    queryFn: () => getProfile(selectedServerObj?.apiPrefix ?? ""),
+  });
+
+  const hintText = getLoginStatusHintTxt(
+    profileStatusData?.logged_in,
+    profileData,
+  );
+  const idps = selectedServerObj?.idp ?? [];
 
   return (
     <Box
@@ -133,8 +118,8 @@ export function ServerSelector(props: {
         <Select
           variant="standard"
           label="Server"
-          value={selectedServer}
-          onChange={(e) => onSelectedServerChange(e.target.value)}
+          value={selectedServerId}
+          onChange={(e) => setSelectedServer(e.target.value)}
         >
           {servers.map((server) => (
             <MenuItem key={server.id} value={server.id}>
@@ -142,14 +127,47 @@ export function ServerSelector(props: {
             </MenuItem>
           ))}
         </Select>
-        {!hasIAP ? (
+
+        {isLoginStatusLoading ? (
+          <Box>Fetching login status ...</Box>
+        ) : profileStatusData?.logged_in ? (
           <Fragment>
-            <Box sx={{ justifySelf: "right" }}>Pick a Name:</Box>
+            <Box>{hintText}</Box>
+            <Box>{connectBtn}</Box>
+            <Box>
+              <Button fullWidth onClick={onLogout}>
+                Logout
+              </Button>
+            </Box>
+          </Fragment>
+        ) : (
+          <Fragment>
+            {idps.map((idp) => (
+              <IdPLoginButton
+                key={idp.name}
+                idpContext={idp}
+                onClick={() => handleLoginClick(idp)}
+              />
+            ))}
+          </Fragment>
+        )}
+
+        {selectedServerObj?.allowAnonymous && (
+          <Box sx={{ paddingTop: 2 }}>
+            <Divider orientation="horizontal" />
+            <Box>Or, Connect as a visitor:</Box>
             <TextField
               fullWidth
               variant="standard"
-              value={preferName}
-              onChange={(e) => onPreferNameChange(e.target.value)}
+              value={preference?.name ?? ""}
+              onChange={(e) =>
+                onPreferenceChange((prev) => {
+                  return {
+                    ...prev,
+                    name: e.target.value,
+                  };
+                })
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -168,41 +186,7 @@ export function ServerSelector(props: {
             >
               {connectBtn}
             </Box>
-          </Fragment>
-        ) : (
-          <Fragment>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                marginTop: "2",
-                gridColumn: "1 / span 2",
-                flexDirection: "column",
-                gap: 2,
-              }}
-            >
-              {isLoggingIn && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {hintText}
-                </Box>
-              )}
-              {loggedIn && loggedInAs ? (
-                connectBtn
-              ) : (
-                <IaPLoginButton
-                  loading={isLoggingIn}
-                  onClick={handleLoginClick}
-                  iapContext={selectedServerObj!.iap!}
-                />
-              )}
-            </Box>
-          </Fragment>
+          </Box>
         )}
       </Box>
     </Box>

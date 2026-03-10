@@ -6,8 +6,8 @@ export enum WellKnownAttributes {
 export type ConnectionAttributes = Partial<Record<WellKnownAttributes, string>>;
 
 export type Preference = {
-  name: string;
-  indexOfPreferColor: number;
+  name?: string;
+  indexOfPreferColor?: number;
 };
 
 export interface RenamePayload {
@@ -329,15 +329,8 @@ export type IDProvider = {
   // Kind determines the way the user interact with the IAP.
   kind: IAPKind;
 
-  // the Text displayed on the login button
-  // For now, only `displayName` of `string` type is supported
-  // and `MultiLanguageText` type will be supported later as well .
-  displayName?: string | MultiLanguageText;
-
   // The page which the user should be redirected to when they click the login button.
   loginUrl: string;
-
-  loginButtonIconDataURL?: DataURL;
 
   parameters?: IAPParameters;
 };
@@ -348,7 +341,8 @@ export type WSServer = {
   id: string;
   iceServers: string[];
   apiPrefix: string;
-  iap?: IDProvider;
+  idp: IDProvider[];
+  allowAnonymous: boolean;
 };
 
 export interface Profile {

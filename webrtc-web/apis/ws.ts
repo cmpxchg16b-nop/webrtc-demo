@@ -1,5 +1,4 @@
 import { WSServer } from "./types";
-import serversJson from "../servers.json";
 
 /**
  * Build a WebSocket URL from the current origin by appending the given path.
@@ -77,13 +76,9 @@ function tryPlaceDN42ServersToTop(wsServers: WSServer[]): WSServer[] {
   return result;
 }
 
-function sortSignallingServers(wsServers: WSServer[]): WSServer[] {
-  wsServers = tryPlaceTestServersToTop([...wsServers]);
-  wsServers = tryPlaceDN42ServersToTop([...wsServers]);
-  return wsServers;
-}
-
-export function getSignallingServers(): WSServer[] {
-  const servers: WSServer[] = serversJson as any;
-  return sortSignallingServers(servers);
+export function getSignallingServers(): Promise<WSServer[]> {
+  // for now, we load it from /servers.json, a static JSON file
+  // to enable hot swapping of server list and dynamic configuration
+  const assetPath = "/servers.json";
+  return fetch(assetPath).then((r) => r.json());
 }

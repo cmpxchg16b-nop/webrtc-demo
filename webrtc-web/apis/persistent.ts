@@ -33,10 +33,8 @@ export function usePersistentStorage(
 export enum PSKey {
   CurrentServer = "current_server",
   PinnedServer = "pinned_server",
-  PreferredUsername = "preferred_username",
   HasLoggedIn = "has_logged_in",
   LoggedInAs = "logged_in_as",
-  LoggingIn = "logging_in",
-  LoggingStartedAt = "logging_in_started_at",
   Unreads = "all_unreads",
+  Preference = "preference",
 }
