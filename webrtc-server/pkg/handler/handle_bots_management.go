@@ -108,6 +108,7 @@ func (h *BotsManagementHandler) handleAddBot(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *BotsManagementHandler) handleDeleteBot(w http.ResponseWriter, r *http.Request) {
+	// currently all users are stored in memory, to delete all users: simply re-start the app
 	json.NewEncoder(w).Encode(&ErrResponse{Err: "not implemented yet"})
 }
 
