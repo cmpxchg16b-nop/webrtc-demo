@@ -16,10 +16,13 @@ type User struct {
 	Id          string `json:"id"`
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
-	AvatarURL   string `json:"avatar_url"`
-	GithubId    string `json:"github_id"`
-	DN42ASN     string `json:"dn42_asn"`
-	GoogleId    string `json:"google_id"`
+
+	// could be a data URL
+	AvatarURL string `json:"avatar_url"`
+	GithubId  string `json:"github_id"`
+	DN42ASN   string `json:"dn42_asn"`
+	GoogleId  string `json:"google_id"`
+	IsBot     bool   `json:"is_bot"`
 }
 
 type UserManager interface {
