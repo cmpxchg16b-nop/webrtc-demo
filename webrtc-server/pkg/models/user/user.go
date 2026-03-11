@@ -25,6 +25,12 @@ type User struct {
 	IsBot     bool   `json:"is_bot"`
 }
 
+type UserCreationPayload struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+}
+
 type UserManager interface {
 	// returns (theUser, created, error)
 	LoadOrCreateNewUserByGithubId(ctx context.Context, githubId string, newUser User) (*User, bool, error)
@@ -34,6 +40,8 @@ type UserManager interface {
 	GetUserById(ctx context.Context, userId string) (*User, error)
 
 	GetUserByUsername(ctx context.Context, username string) (*User, error)
+
+	CreateUser(ctx context.Context, payload UserCreationPayload, isBot bool) (*User, error)
 }
 
 type InMemoryUserStore struct {
@@ -172,4 +180,30 @@ func (memUserMngr *MemoryUserManager) GetUserByUsername(ctx context.Context, use
 		}
 	}
 	return nil, nil
+}
+
+func (memUserMngr *MemoryUserManager) CreateUser(ctx context.Context, payload UserCreationPayload, isBot bool) (*User, error) {
+	user := User{
+		Id:          uuid.NewString(),
+		Username:    payload.Username,
+		DisplayName: payload.DisplayName,
+		AvatarURL:   payload.AvatarURL,
+		IsBot:       isBot,
+	}
+
+	for {
+		oldStore := memUserMngr.store.Load()
+		if oldStore != nil {
+			if _, hit := oldStore.IndexByUsername[user.Username]; hit {
+				return nil, ErrUsernameDuplicated
+			}
+		}
+		newStore, err := oldStore.AddUser(user)
+		if err != nil {
+			return nil, err
+		}
+		if memUserMngr.store.CompareAndSwap(oldStore, newStore) {
+			return &user, nil
+		}
+	}
 }
