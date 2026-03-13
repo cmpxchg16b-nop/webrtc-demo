@@ -2076,6 +2076,9 @@ export default function Home() {
                       }
                       userPreferenceMap={userPreferenceMap}
                       audioContextRef={audioCtxRef}
+                      apiPrefix={pinnedserverObject?.apiPrefix}
+                      myNodeId={nodeId}
+                      myUsername={loggedInAs?.username || ""}
                     />
                   ))}
                 </Box>

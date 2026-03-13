@@ -34,6 +34,7 @@ import {
 import { Fragment } from "react/jsx-runtime";
 import { RenderAvatar } from "./RenderAvatar";
 import { RefObject, useEffect, useRef, useState } from "react";
+import { ShowDisplayName } from "./ShowDisplayName";
 
 function getFileLoadedRatio(
   file: ChatMessageFile,
@@ -686,6 +687,9 @@ export function RenderMessage(props: {
   fileTransferStatus: Record<string, FileTransferStatusEntry>;
   userPreferenceMap: Record<string, Preference>;
   audioContextRef: RefObject<AudioContext | null>;
+  apiPrefix: string | undefined;
+  myNodeId: string;
+  myUsername: string;
 }) {
   // todo: add message edit feature and delete feature in context menu
   const {
@@ -696,8 +700,14 @@ export function RenderMessage(props: {
     fileTransferStatus,
     userPreferenceMap,
     audioContextRef,
+    apiPrefix,
+    myNodeId,
+    myUsername,
   } = props;
-  const peername = userPreferenceMap[message.fromNodeId]?.name ?? "";
+  const peername =
+    message.fromNodeId === myNodeId
+      ? myUsername
+      : (userPreferenceMap[message.fromNodeId]?.name ?? "");
   const peercoloridxprefer =
     userPreferenceMap[message.fromNodeId]?.indexOfPreferColor ?? -1;
 
@@ -739,7 +749,11 @@ export function RenderMessage(props: {
           overflow: "hidden",
         }}
       >
-        {peername && <Box sx={{ paddingLeft: 1 }}>{peername}</Box>}
+        {peername && (
+          <Box sx={{ paddingLeft: 1 }}>
+            <ShowDisplayName apiPrefix={apiPrefix || ""} username={peername} />
+          </Box>
+        )}
         <Card
           sx={{
             gap: 1,

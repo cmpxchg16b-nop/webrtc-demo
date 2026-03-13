@@ -115,9 +115,9 @@ services:
       - "./shared-socks:/var/run/webrtc-server"
     command:
       - "--allowed-origin=https://${MAIN_DOMAIN}"
-      - "--github-login-redir-url=http://${MAIN_DOMAIN}/api/github/login/auth"
-      - "--kioubit-login-redir-url=http://${MAIN_DOMAIN}/api/kioubit/login/auth"
-      - "--login-success-redir-url=http://${MAIN_DOMAIN}/"
+      - "--github-login-redir-url=https://${MAIN_DOMAIN}/api/github/login/auth"
+      - "--kioubit-login-redir-url=https://${MAIN_DOMAIN}/api/kioubit/login/auth"
+      - "--login-success-redir-url=https://${MAIN_DOMAIN}/"
       - "--kioubit-login-pubkey=./kioubit-login-pubkey.pem"
       - "--management-listen=/var/run/webrtc-server/management.sock"
       - "--debug=true"
