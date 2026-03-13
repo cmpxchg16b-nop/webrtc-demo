@@ -9,7 +9,7 @@
       {
         "name": "github",
         "kind": "github",
-        "loginUrl": "http://localhost:3000/api/github/login/start"
+        "loginUrl": "/api/github/login/start"
       }
     ],
     "allowAnonymous": true
@@ -25,7 +25,7 @@
       {
         "name": "kioubit",
         "kind": "kioubit",
-        "loginUrl": "http://localhost:3000/api/kioubit/login/start"
+        "loginUrl": "/api/kioubit/login/start"
       }
     ],
     "allowAnonymous": true
@@ -41,12 +41,12 @@
         "name": "github",
         "kind": "github",
         "displayName": "Sign in with Github",
-        "loginUrl": "http://localhost:3000/api/github/login/start"
+        "loginUrl": "/api/github/login/start"
       },
       {
         "name": "kioubit",
         "kind": "kioubit",
-        "loginUrl": "http://localhost:3000/api/kioubit/login/start"
+        "loginUrl": "/api/kioubit/login/start"
       }
     ],
     "allowAnonymous": true

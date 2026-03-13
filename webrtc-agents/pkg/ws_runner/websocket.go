@@ -114,10 +114,12 @@ func (runner *WebSocketRunner) Run(ctx context.Context, handler pkghandlers.Gene
 
 			// Establish WebSocket connection
 
+			var registerNodeName = runner.NodeName
 			var requestHeaders http.Header = nil
 			if jwt := runner.getJWT(); jwt != "" {
 				requestHeaders = make(http.Header)
 				requestHeaders.Set("Authorization", "bearer "+jwt)
+				registerNodeName = ""
 			}
 			wsConn, _, err := runner.getDialer().Dial(u.String(), requestHeaders)
 			if err == nil {
@@ -126,7 +128,7 @@ func (runner *WebSocketRunner) Run(ctx context.Context, handler pkghandlers.Gene
 					log.Printf("Dialed to ws server %+v", wsConn.RemoteAddr().String())
 
 					registerer := &WebSocketRegisterer{}
-					if err := registerer.Register(wsConn, runner.NodeName); err != nil {
+					if err := registerer.Register(wsConn, registerNodeName); err != nil {
 						errLogger.Println("Failed to send registration message:", err)
 						return
 					}
