@@ -66,4 +66,5 @@ WORKDIR /app
 # Copy the binary from builder
 COPY --from=builder /build/webrtc-agents/bin/agents /app/agents
 
-ENTRYPOINT ["/app/agents"]
+# Copy some dependent scripts
+COPY scripts /app/scripts

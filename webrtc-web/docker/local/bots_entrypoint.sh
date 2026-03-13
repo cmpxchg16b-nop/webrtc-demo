@@ -1,43 +1,22 @@
-#!/bin/sh
-
-
-# Note: the purpose of this script is to register
-# bots' user accounts to the server, obtain the JWT tokens
-# and programatically generate the .env.bot environment file for
-# keeping the JWT token secrets so that the bots can authenticate
-# thenselves to the server using Authorization bearer method.
-#
-# This script relys on: curl, jq, and assuming the management api
-# socket of the server is in /var/run/webrtc-server/management.sock
-#
-# also this script is assuming to run on the working directory as same
-# as the agents process's working directory.
+#!/bin/bash
 
 set -e
 
-MANAGEMENT_API=/var/run/webrtc-server/management.sock
+if [ -z $MANAGEMENT_API ]; then
+    echo "MANAGEMENT_API is not set"
+    exit 1
+fi
+echo MANAGEMENT_API: $MANAGEMENT_API
 
-echo "Getting Bot JWT token for EchoBot ..."
-echobot_token=$(echo todo)
+if [ -z $AVATAR_B64_PATH ]; then
+    echo "AVATAR_B64_PATH is not set"
+    exit 1
+fi
+echo AVATAR_B64_PATH: $AVATAR_B64_PATH
 
-echo "Getting Bot JWT token for MusicBot ..."
-musicbot_token=$(echo todo)
+echo Using $(pwd) as current working directory
 
-echo "Getting Bot JWT token for CounterBot ..."
-counterbot_token=$(echo todo)
 
-echo "Getting Bot JWT token for ClockBot ..."
-clockbot_token=$(echo todo)
-
-echo "Getting Bot JWT token for ChatBot ..."
-chatbot_token=$(echo todo)
-
-echo "Generating .env.bot file in current directory $PWD"
-echo "ECHOBOT_JWT_TOKEN=$echobot_token" > .env.bots
-echo "MUSICBOT_JWT_TOKEN=$musicbot_token" >> .env.bots
-echo "COUNTERBOT_JWT_TOKEN=$counterbot_token" >> .env.bots
-echo "CLOCKBOT_JWT_TOKEN=$clockbot_token" >> .env.bots
-echo "CHATBOT_JWT_TOKEN=$chatbot_token" >> .env.bots
-
-echo "Done, launching bot agents process ..."
-exec /app/agents $@
+MANAGEMENT_API=${MANAGEMENT_API} \
+AVATAR_B64_PATH=${AVATAR_B64_PATH} \
+scripts/prepare-bot-tokens.sh "$@"
