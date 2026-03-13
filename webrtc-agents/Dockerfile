@@ -67,4 +67,4 @@ WORKDIR /app
 COPY --from=builder /build/webrtc-agents/bin/agents /app/agents
 
 # Copy some dependent scripts
-COPY scripts /app/scripts
+COPY webrtc-agents/scripts /app/scripts
