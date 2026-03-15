@@ -1806,6 +1806,9 @@ export default function Home() {
     setMobileDrawerOpen(!mobileDrawerOpen);
   };
 
+  const myUsername =
+    loggedInAs?.username ?? userPreferenceMap[nodeId ?? ""]?.name ?? "";
+
   const dispUsername =
     loggedInAs?.displayName ??
     loggedInAs?.username ??
@@ -1840,7 +1843,7 @@ export default function Home() {
             }}
           >
             <RenderAvatar
-              username={loggedInAs?.username ?? ""}
+              username={myUsername}
               size="large"
               preferredColorIdx={preference?.indexOfPreferColor}
             />
