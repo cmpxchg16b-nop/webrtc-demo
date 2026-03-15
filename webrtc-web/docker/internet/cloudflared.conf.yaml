@@ -6,3 +6,5 @@ ingress:
   # dns label 'inet-webrtc-web' to ip address within docker user-defined network
   - hostname: chatty.best
     service: http://inet-webrtc-web
+  # a catch-all default, using built-in 404 page
+  - service: http_status:404
