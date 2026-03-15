@@ -1,0 +1,18 @@
+[
+  {
+    "url": "/api/ws",
+    "name": "Main",
+    "id": "main",
+    "iceServers": ["stun:stun.l.google.com:19302"],
+    "apiPrefix": "/api",
+    "idp": [
+      {
+        "name": "github",
+        "kind": "github",
+        "displayName": "Sign in with Github",
+        "loginUrl": "/api/github/login/start"
+      }
+    ],
+    "allowAnonymous": true
+  }
+]

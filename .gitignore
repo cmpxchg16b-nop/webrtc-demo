@@ -9,3 +9,5 @@ webrtc-agents/docker/dn42/.env.test
 webrtc-agents/docker/clearnet/.env.*
 webrtc-agents/docker/dn42/.env.*
 webrtc-agents/.env.bots
+webrtc-web/docker/internet/cfd_tunnel.json
+webrtc-web/docker/internet/cfd_credentials.json

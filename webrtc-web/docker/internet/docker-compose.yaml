@@ -1,0 +1,86 @@
+name: inet-webrtc-chat
+networks:
+  inet-webrtc-chat:
+    name: "inet-webrtc-chat"
+    driver: bridge
+    enable_ipv4: false
+    enable_ipv6: true
+services:
+  cloudflared:
+    container_name: inet-webrtc-cloudflared
+    pull_policy: never
+    image: cloudflare/cloudflared:latest
+    networks:
+      - inet-webrtc-chat
+    volumes:
+      - "./cfd_credentials.json:/app/cfd_credentials.json:ro"
+      - "./cloudflared.conf.yaml:/app/cloudflared.conf.yaml:ro"
+    command:
+      - "tunnel"
+      - "--no-autoupdate"
+      - "--config=/app/cloudflared.conf.yaml"
+      - "--edge-ip-version=6"
+      - "run"
+      - "${CLOUDFLARED_UUID}"
+
+  # agents:
+  #   container_name: inet-webrtc-agents
+  #   image: webrtc-agents:latest
+  #   build:
+  #     context: "./../../../"
+  #     dockerfile: "webrtc-agents/Dockerfile"
+  #   pull_policy: never
+  #   entrypoint: /app/entrypoint.sh
+  #   environment:
+  #     - "MANAGEMENT_API=/var/run/webrtc-server/management.sock"
+  #     - "AVATAR_B64_PATH=/app/bot-avatar.png.dataurl"
+  #   networks:
+  #     - inet-webrtc-chat
+  #   volumes:
+  #     - "./bots_entrypoint.sh:/app/entrypoint.sh:ro"
+  #     - "./.env:/app/.env:ro"
+  #     - "./bot-avatar.png.dataurl:/app/bot-avatar.png.dataurl:ro"
+  #     - "./shared-socks:/var/run/webrtc-server"
+  #   working_dir: /app
+  #   depends_on:
+  #     - server
+  #   command:
+  #     - "/app/agents"
+  #     - "--chatbot-model=deepseek/deepseek-v3.2"
+  #     - "--ws-server=wss://${MAIN_DOMAIN}/api/ws"
+  #     - "--ice-server=stun:stun.l.google.com:19302"
+  #     - "--reconnect-on-disconnect"
+  #     - "--reconnect-delay=3s"
+  #     - "--openrouter-apikey-env=OPENROUTER_APIKEY"
+  #     - "--prefer-ipv6=true"
+  #     - "--bots-secret-env-file=.env.bots"
+
+  server:
+    container_name: inet-webrtc-server
+    hostname: inet-webrtc-server
+    build:
+      context: "./../../../webrtc-server"
+    image: webrtc-server:latest
+    pull_policy: never
+    volumes:
+      - "./.env:/app/.env:ro"
+      - "./shared-socks:/var/run/webrtc-server"
+    command:
+      - "--allowed-origin=https://${MAIN_DOMAIN}"
+      - "--github-login-redir-url=https://${MAIN_DOMAIN}/api/github/login/auth"
+      - "--login-success-redir-url=https://${MAIN_DOMAIN}/"
+      - "--management-listen=/var/run/webrtc-server/management.sock"
+      - "--debug=true"
+    networks:
+      - inet-webrtc-chat
+  web:
+    container_name: inet-webrtc-web
+    hostname: inet-webrtc-web
+    image: webrtc-chat:latest
+    restart: unless-stopped
+    pull_policy: never
+    volumes:
+      - "./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro"
+      - "./servers.json:/usr/share/nginx/html/servers.json:ro"
+    networks:
+      - inet-webrtc-chat

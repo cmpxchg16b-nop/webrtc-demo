@@ -1,0 +1,8 @@
+tunnel: e79325e2-53e1-409e-a7c3-5fc26faf53f8
+credentials-file: /app/cfd_credentials.json
+
+ingress:
+  # it is the docker's internal resolver's job to resolve
+  # dns label 'inet-webrtc-web' to ip address within docker user-defined network
+  - hostname: chatty.best
+    service: http://inet-webrtc-web
