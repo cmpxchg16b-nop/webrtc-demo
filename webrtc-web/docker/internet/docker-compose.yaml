@@ -79,6 +79,8 @@ services:
     image: webrtc-chat:latest
     restart: unless-stopped
     pull_policy: never
+    build:
+      context: "./../../"
     volumes:
       - "./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro"
       - "./servers.json:/usr/share/nginx/html/servers.json:ro"

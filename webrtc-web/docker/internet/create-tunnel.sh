@@ -7,6 +7,8 @@
 
 set -e
 
+source .env
+
 if [ -z "${CF_ACCOUNT_ID}" ]; then
     echo "No CF_ACCOUNT_ID provided"
     exit 1
@@ -61,5 +63,5 @@ curl -o ./cfd_tunnel.json "https://api.cloudflare.com/client/v4/accounts/${CF_AC
 #   }
 # }
 
-cat ./cfd_tunnel.json | jq '.result.credentials_file' > ./cfd_credentials.json
-cat ./cfd_tunnel.json | jq --raw-output '.result.id'
+jq '.result.credentials_file' cfd_tunnel.json > ./cfd_credentials.json
+jq --raw-output '.result.id' cfd_tunnel.json
