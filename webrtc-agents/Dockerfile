@@ -7,7 +7,7 @@ ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY webrtc-agents/deb-source-overrides.sources /etc/apt/sources.list.d/debian.sources
+# COPY webrtc-agents/deb-source-overrides.sources /etc/apt/sources.list.d/debian.sources
 
 # Install build dependencies
 RUN dpkg --add-architecture ${TARGETARCH} && apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
