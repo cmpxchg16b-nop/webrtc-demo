@@ -1,6 +1,6 @@
 "use client";
 
-import { Box } from "@mui/material";
+import { Box, Tooltip } from "@mui/material";
 import { getPreferredColor } from "./ChangePreference";
 import { useQuery } from "@tanstack/react-query";
 import { getAvatar } from "@/apis/profile";
@@ -9,13 +9,15 @@ import {
   paintFirstLetterAvatar,
   PRESET_COLORS,
 } from "@/apis/colors";
+import { AuthenticationType } from "@/apis/types";
 
 export function RenderAvatar(props: {
   username: string;
   size?: "default" | "small" | "large";
   preferredColorIdx?: number | string;
+  authentication: AuthenticationType | undefined;
 }) {
-  const { username, size = "default" } = props;
+  const { username, size = "default", authentication } = props;
   const firstCap =
     username && username.length > 0 ? username[0].toUpperCase() : "";
 
@@ -56,26 +58,22 @@ export function RenderAvatar(props: {
     },
   });
 
-  // If we have a valid avatar URL from IAPOperator, render it as an image
-  if (avatarUrl) {
-    return (
-      <Box
-        component="img"
-        src={avatarUrl}
-        alt={username}
-        sx={{
-          width: variants[size],
-          height: variants[size],
-          borderRadius: "100%",
-          objectFit: "cover",
-          flexShrink: 0,
-        }}
-      />
-    );
-  }
+  const normalAvatar = (
+    <Box
+      component="img"
+      src={avatarUrl}
+      alt={username}
+      sx={{
+        width: variants[size],
+        height: variants[size],
+        borderRadius: "100%",
+        objectFit: "cover",
+        flexShrink: 0,
+      }}
+    />
+  );
 
-  // Fallback to default letter avatar
-  return (
+  const fallBackAvatar = (
     <Box
       sx={[
         {
@@ -99,5 +97,18 @@ export function RenderAvatar(props: {
     >
       {firstCap}
     </Box>
+  );
+
+  return (
+    <Tooltip
+      title={
+        <Box>
+          <Box>{`Username: @${username}`}</Box>
+          <Box>{`Authentication: ${authentication}`}</Box>
+        </Box>
+      }
+    >
+      {avatarUrl ? normalAvatar : fallBackAvatar}
+    </Tooltip>
   );
 }

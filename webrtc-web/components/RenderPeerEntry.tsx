@@ -53,6 +53,7 @@ export function RenderPeerEntry(props: {
     apiPrefix,
   } = props;
   const hasUnreads = numUnreads !== undefined && numUnreads > 0;
+  const peerAuthentication = conn?.entry?.authentication;
 
   return (
     <MenuItem
@@ -79,8 +80,9 @@ export function RenderPeerEntry(props: {
         }}
       >
         <RenderAvatar
-          username={conn.entry?.node_name || conn.node_id}
+          username={conn.entry?.node_name || ""}
           preferredColorIdx={preferredColorIdx}
+          authentication={peerAuthentication}
         />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography

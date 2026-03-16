@@ -5,6 +5,7 @@ import {
   ChatMessageFile,
   ChatMessageFileCategory,
   ChatMessageSongTrack,
+  ConnRegistryData,
   FileTransferStatusEntry,
   MessagePatchOrder,
   MessagePatchOrderKind,
@@ -690,6 +691,7 @@ export function RenderMessage(props: {
   apiPrefix: string | undefined;
   myNodeId: string;
   myUsername: string;
+  connsMap: Record<string, ConnRegistryData>;
 }) {
   // todo: add message edit feature and delete feature in context menu
   const {
@@ -703,11 +705,14 @@ export function RenderMessage(props: {
     apiPrefix,
     myNodeId,
     myUsername,
+    connsMap,
   } = props;
   const peername =
     message.fromNodeId === myNodeId
       ? myUsername
       : (userPreferenceMap[message.fromNodeId]?.name ?? "");
+  const peerAuthentication =
+    connsMap[message?.fromNodeId ?? ""]?.authentication;
   const peercoloridxprefer =
     userPreferenceMap[message.fromNodeId]?.indexOfPreferColor ?? -1;
 
@@ -735,6 +740,7 @@ export function RenderMessage(props: {
       <RenderAvatar
         username={peername}
         preferredColorIdx={peercoloridxprefer}
+        authentication={peerAuthentication}
       />
       <Box
         sx={{

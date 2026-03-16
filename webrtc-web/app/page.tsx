@@ -23,6 +23,7 @@ import {
   WSServer,
   MessagePatchesMap,
   WSConnStatusShort,
+  ConnRegistryData,
 } from "@/apis/types";
 import { useAutoconnect } from "@/apis/autoconnect";
 import { ChangePreference } from "@/components/ChangePreference";
@@ -109,12 +110,6 @@ function makeConnTrackEntry(iceServers: string[]): ConnTrackEntry {
 // key is the node_id of remote peer
 type ConnTrack = Record<string, ConnTrackEntry>;
 
-interface WSConnRecord {
-  serverId: string;
-  ws: WebSocket;
-  shouldReconnect: boolean;
-}
-
 function useWs(
   setConnTrackStatus: Dispatch<SetStateAction<ConnTrackStatus>>,
   setMsgPatches: Dispatch<SetStateAction<MessagePatchesMap>>,
@@ -133,15 +128,34 @@ function useWs(
   const [upTime, setUpTime] = useState<number | undefined>(undefined);
   const pingTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [conns, setConns] = useState<ConnEntry[]>([]);
+  const [connsMap, setConnsMap] = useState<Record<string, ConnRegistryData>>(
+    {},
+  );
   const connTrackRef = useRef<ConnTrack>({});
   const [wsConnStatus, setWSConnStatus] = useState<WSConnStatusShort>(
     WSConnStatusShort.Unknown,
   );
 
   const doRefresh = (apiPrefix: string) =>
-    getConns(apiPrefix).then((conns) => {
-      setConns(conns);
-    });
+    getConns(apiPrefix)
+      .then((r) => {
+        const entries: ConnEntry[] = Object.entries(r).map(
+          ([nodeId, entry]) => {
+            const registeredAt = entry.registered_at;
+            return {
+              node_id: nodeId,
+              entry: entry,
+              registered_at: registeredAt,
+            } as ConnEntry;
+          },
+        );
+        entries.sort((a, b) => b.registered_at - a.registered_at);
+        return { entriesMap: r, entries };
+      })
+      .then(({ entries, entriesMap }) => {
+        setConns(entries);
+        setConnsMap(entriesMap);
+      });
 
   const sendWsMsg = (obj: any) => {
     try {
@@ -477,6 +491,7 @@ function useWs(
     nodeId,
     nodeIdRef,
     conns,
+    connsMap,
     connTrackRef,
     wsConnStatus,
     sendWsMsg,
@@ -1109,14 +1124,16 @@ function tryParseInt(s: string): number {
   return -1;
 }
 
-function getUserPreferenceMap(conns: ConnEntry[]): Record<string, Preference> {
+function getUserPreferenceMap(
+  connsMap: Record<string, ConnRegistryData>,
+): Record<string, Preference> {
   const userPreferenceMap: Record<string, Preference> = {};
-  for (const conn of conns ?? []) {
-    if (conn.entry?.node_name) {
-      userPreferenceMap[conn.node_id] = {
-        name: conn.entry.node_name,
+  for (const [node_id, conn] of Object.entries(connsMap)) {
+    if (conn?.node_name) {
+      userPreferenceMap[node_id] = {
+        name: conn.node_name,
         indexOfPreferColor: tryParseInt(
-          conn.entry?.attributes?.[WellKnownAttributes.PreferredColor] ?? "",
+          conn.attributes?.[WellKnownAttributes.PreferredColor] ?? "",
         ),
       };
     }
@@ -1524,6 +1541,7 @@ export default function Home() {
     nodeId,
     nodeIdRef,
     conns,
+    connsMap,
     connTrackRef,
     wsConnStatus,
     sendWsMsg,
@@ -1676,7 +1694,8 @@ export default function Home() {
     }
   };
 
-  const userPreferenceMap = getUserPreferenceMap(conns ?? []);
+  const userPreferenceMap = getUserPreferenceMap(connsMap ?? {});
+  const meAuthentication = connsMap?.[nodeId]?.authentication;
 
   const [searchKw, setSearchKw] = useState<string>("");
 
@@ -1846,6 +1865,7 @@ export default function Home() {
               username={myUsername}
               size="large"
               preferredColorIdx={preference?.indexOfPreferColor}
+              authentication={meAuthentication}
             />
             <Box
               sx={{
@@ -1978,15 +1998,16 @@ export default function Home() {
       {activeConn && (
         <Fragment>
           <RenderAvatar
-            username={userPreferenceMap[activeConn]?.name ?? ""}
+            username={connsMap[activeConn]?.node_name ?? ""}
             size="small"
             preferredColorIdx={
               userPreferenceMap[activeConn]?.indexOfPreferColor
             }
+            authentication={connsMap[activeConn]?.authentication}
           />
           <Box>
             <ShowDisplayName
-              username={userPreferenceMap[activeConn]?.name ?? ""}
+              username={connsMap[activeConn]?.node_name ?? ""}
               apiPrefix={pinnedserverObject?.apiPrefix || ""}
             />
           </Box>
@@ -2081,7 +2102,12 @@ export default function Home() {
                       audioContextRef={audioCtxRef}
                       apiPrefix={pinnedserverObject?.apiPrefix}
                       myNodeId={nodeId}
-                      myUsername={loggedInAs?.username || ""}
+                      myUsername={
+                        loggedInAs?.username ??
+                        connsMap[nodeId]?.node_name ??
+                        ""
+                      }
+                      connsMap={connsMap}
                     />
                   ))}
                 </Box>

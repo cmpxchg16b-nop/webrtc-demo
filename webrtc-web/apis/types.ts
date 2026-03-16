@@ -53,7 +53,7 @@ export interface AttributesAnnouncementPayload {
   withdrawals?: string[];
 }
 
-export type AuthenticationType = "jwt" | "mtls";
+export type AuthenticationType = "jwt" | "session" | "none";
 
 export const AuthenticationTypeJWT = "jwt" as const;
 export const AuthenticationTypeMTLS = "mtls" as const;
