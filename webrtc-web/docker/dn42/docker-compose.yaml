@@ -7,23 +7,19 @@ networks:
     enable_ipv6: true
     ipam:
       config:
-        - subnet: ${RFC5375_RANDOMIZED_ULA}
-volumes:
-  chat_acme_challenge:
-    name: chat_acme_challenge
-    external: true
-  chat_acme_certs:
-    name: chat_acme_certs
-    external: true
+        - subnet: "fdda:8ca4:1556:a007::/64"
+          gateway: "fdda:8ca4:1556:a007:ffff::1"
 services:
   web:
     container_name: dn42-webrtc-chat
-    image: nginx:latest
+    image: docker.io/library/caddy:latest
     pull_policy: always
-    volumes:
-      - "./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro"
-      - "chat_acme_challenge:/usr/share/nginx/acme-challenge"
-      - "chat_acme_certs:/etc/nginx/acme-certs:ro"
-      - "./out:/usr/share/nginx/html:ro"
     networks:
-      - "dn42-webrtc-chat"
+      dn42-webrtc-chat:
+        ipv6_address: "fdda:8ca4:1556:a007::1"
+    volumes:
+      - "./caddy.json:/caddy.json:ro"
+    command:
+      - "caddy"
+      - "run"
+      - "--config=/caddy.json"
