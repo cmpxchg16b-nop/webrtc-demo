@@ -23,7 +23,7 @@
             "issuers": [
               {
                 "module": "acme",
-                "ca": "https://acme.burble.dn42/v1/staging/acme/directory",
+                "ca": "https://acme.burble.dn42/v1/dn42/acme/directory",
                 "test_ca": "https://acme.burble.dn42/v1/staging/acme/directory",
                 "email": "i@exploro.one",
                 "acme_timeout": "300s",
@@ -45,21 +45,7 @@
     "http": {
       "servers": {
         "main": {
-          "listen": [":2015"],
-          "logs": {},
-          "routes": [
-            {
-              "handle": [
-                {
-                  "handler": "static_response",
-                  "body": "Hello, world!"
-                }
-              ]
-            }
-          ]
-        },
-        "hello": {
-          "listen": [":443"],
+          "listen": [":443", ":80"],
           "routes": [
             {
               "match": [
@@ -69,8 +55,8 @@
               ],
               "handle": [
                 {
-                  "handler": "static_response",
-                  "body": "Hello, privacy!"
+                  "handler": "file_server",
+                  "root": "/usr/share/nginx/html"
                 }
               ]
             }

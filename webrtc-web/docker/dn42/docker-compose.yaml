@@ -24,6 +24,7 @@ services:
       - "./dn42-root-ca.crt:/dn42-root-ca.crt:ro"
       - "./resolv.conf:/etc/resolv.conf:ro"
       - "caddydata:/caddydata"
+      - "./servers.json:/usr/share/nginx/html/servers.json:ro"
     command:
       - "caddy"
       - "run"

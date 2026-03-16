@@ -1,0 +1,11 @@
+[
+  {
+    "url": "/api/ws",
+    "name": "DN42 & NeoNetwork",
+    "id": "main",
+    "iceServers": ["stun:webrtc-stun.chat.dn42:3478"],
+    "apiPrefix": "/api",
+    "idp": [],
+    "allowAnonymous": true
+  }
+]
