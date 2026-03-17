@@ -14,8 +14,10 @@ volumes:
 services:
   web:
     container_name: dn42-webrtc-chat
-    image: docker.io/library/caddy:latest
-    pull_policy: always
+    image: webrtc-chat:latest-caddy
+    build:
+      context: "./../../"
+      target: "prod-caddy"
     networks:
       dn42-webrtc-chat:
         ipv6_address: "${DN42_ULA}"

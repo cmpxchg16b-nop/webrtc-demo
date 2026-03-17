@@ -15,8 +15,14 @@ COPY . .
 # Build the Next.js application (static export)
 RUN npm run build
 
-# Stage 2: Serve with nginx
-FROM nginx:alpine AS prod
+
+FROM docker.io/library/caddy:latest AS prod-caddy
+
+# Copy static assets from builder stage
+COPY --from=builder /app/out /usr/share/nginx/html
+
+
+FROM nginx:alpine AS prod-nginx
 
 # Copy static assets from builder stage
 COPY --from=builder /app/out /usr/share/nginx/html
