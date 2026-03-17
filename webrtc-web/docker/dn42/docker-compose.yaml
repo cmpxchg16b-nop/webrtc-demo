@@ -15,6 +15,9 @@ services:
   web:
     container_name: dn42-webrtc-chat
     image: webrtc-chat:latest-caddy
+    environment:
+      - "ACME_CONTACT_EMAIL=${ACME_CONTACT_EMAIL}"
+      - "CADDY_ADMIN_ADDR=${CADDY_ADMIN_ADDR}"
     build:
       context: "./../../"
       target: "prod-caddy"

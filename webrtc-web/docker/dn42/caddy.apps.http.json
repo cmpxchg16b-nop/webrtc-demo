@@ -1,0 +1,100 @@
+{
+  "servers": {
+    "main": {
+      "listen": [":443", ":80"],
+      "routes": [
+        {
+          "match": [
+            {
+              "host": ["chat.dn42"]
+            }
+          ],
+          "handle": [
+            {
+              "handler": "file_server",
+              "root": "/usr/share/nginx/html"
+            }
+          ]
+        },
+        {
+          "match": [
+            {
+              "host": ["chat.duststars.dn42"],
+              "path": ["/api/*"]
+            }
+          ],
+          "handle": [
+            {
+              "handler": "headers",
+              "response": {
+                "delete": ["X-Origin-Pass"],
+                "deferred": true
+              }
+            },
+            {
+              "handler": "headers",
+              "response": {
+                "set": {
+                  "Access-Control-Allow-Origin": [
+                    "{http.request.header.Origin}"
+                  ],
+                  "Access-Control-Allow-Methods": [
+                    "GET, POST, PUT, DELETE, OPTIONS"
+                  ],
+                  "Access-Control-Allow-Credentials": ["true"],
+                  "Vary": ["Origin"]
+                },
+                "deferred": true,
+                "require": {
+                  "headers": {
+                    "X-Origin-Pass": ["true"]
+                  }
+                }
+              }
+            },
+            {
+              "handler": "map",
+              "source": "{http.request.header.Origin}",
+              "destinations": ["{vars.origin_pass}"],
+              "defaults": [""],
+              "mappings": [
+                {
+                  "input_regexp": "^https?://localhost(:[0-9]+)?$",
+                  "outputs": ["true"]
+                },
+                {
+                  "input_regexp": "^https?://chat\\.duststars\\.dn42(:[0-9]+)?$",
+                  "outputs": ["true"]
+                },
+                {
+                  "input_regexp": "^https?://chat\\.dn42(:[0-9]+)?$",
+                  "outputs": ["true"]
+                }
+              ]
+            },
+            {
+              "handler": "headers",
+              "response": {
+                "add": {
+                  "X-Origin-Pass": ["{vars.origin_pass}"]
+                },
+                "deferred": true
+              }
+            },
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "dn42-webrtc-server:3001"
+                }
+              ],
+              "rewrite": {
+                "strip_path_prefix": "/api"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
