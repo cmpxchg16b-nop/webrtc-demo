@@ -1,6 +1,6 @@
 [
   {
-    "url": "wss://chat.duststars.dn42/api",
+    "url": "wss://chat.duststars.dn42/api/ws",
     "name": "DN42 & NeoNetwork",
     "id": "dn42",
     "iceServers": ["stun:webrtc-stun.chat.dn42:3478"],

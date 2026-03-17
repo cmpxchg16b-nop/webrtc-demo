@@ -40,6 +40,8 @@ services:
       - "--login-success-redir-url=https://${MAIN_DOMAIN}/"
       - "--kioubit-login-pubkey=./kioubit-login-pubkey.pem"
       - "--management-listen=/var/run/webrtc-server/management.sock"
+      - "--cookie-samesite=None"
+      - "--cookie-secure=true"
     networks:
       dn42-webrtc-chat:
         ipv6_address: "${DN42_SERVER_ULA}"

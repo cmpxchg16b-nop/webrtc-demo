@@ -1842,10 +1842,11 @@ export default function Home() {
   };
 
   const handleLogout = () => {
-    logout(selectedserverObject?.apiPrefix || "");
-    setPinnedServer("");
-    clearLoggedInState();
-    disconnect();
+    logout(selectedserverObject?.apiPrefix || "").then(() => {
+      setPinnedServer("");
+      clearLoggedInState();
+      disconnect();
+    });
   };
 
   const drawerContent = (
@@ -1972,6 +1973,7 @@ export default function Home() {
           connecting={wsConnStatus === WSConnStatusShort.Connecting}
           preference={preference}
           onPreferenceChange={setPreference}
+          pinnedServer={pinnedServer}
           onPinServer={(pinnedServer, preference, hasLoggedIn) => {
             connect(pinnedServer, hasLoggedIn ? undefined : preference);
             setPinnedServer(pinnedServer.id);

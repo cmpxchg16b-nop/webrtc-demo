@@ -23,6 +23,7 @@ import { PSKey, usePersistentStorage } from "@/apis/persistent";
 // Select what signalling server to use
 export function ServerSelector(props: {
   servers: WSServer[];
+  pinnedServer: string;
   onPinServer: (
     server: WSServer,
     preference: Preference | undefined,
@@ -38,6 +39,7 @@ export function ServerSelector(props: {
     preference,
     onPreferenceChange,
     connecting,
+    pinnedServer,
     onPinServer,
     onLogout,
   } = props;
@@ -64,13 +66,23 @@ export function ServerSelector(props: {
 
   const { isLoading: isLoginStatusLoading, data: profileStatusData } = useQuery(
     {
-      queryKey: ["hasloggedin", selectedServerObj?.apiPrefix ?? ""],
+      queryKey: [
+        "hasloggedin",
+        selectedServerObj?.apiPrefix ?? "",
+        "pinnedServer",
+        pinnedServer,
+      ],
       queryFn: () => getProfileStatus(selectedServerObj?.apiPrefix ?? ""),
     },
   );
 
   const { data: profileData } = useQuery({
-    queryKey: ["profile", selectedServerObj?.apiPrefix ?? ""],
+    queryKey: [
+      "profile",
+      selectedServerObj?.apiPrefix ?? "",
+      "pinnedServer",
+      pinnedServer,
+    ],
     queryFn: () => getProfile(selectedServerObj?.apiPrefix ?? ""),
   });
 
