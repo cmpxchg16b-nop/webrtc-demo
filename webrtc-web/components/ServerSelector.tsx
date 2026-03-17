@@ -1,6 +1,6 @@
 "use client";
 
-import { IDProvider, Preference, Profile, WSServer } from "@/apis/types";
+import { IDProvider, Preference, WSServer } from "@/apis/types";
 import {
   Box,
   TextField,
@@ -9,7 +9,6 @@ import {
   Button,
   useMediaQuery,
   useTheme,
-  Divider,
 } from "@mui/material";
 import { IdPLoginButton } from "./LoginButton";
 import { Dispatch, Fragment, SetStateAction } from "react";
@@ -49,7 +48,7 @@ export function ServerSelector(props: {
   // selectedServerId indicates the server that is currently active in the select box
   // the user might just selected a server, but didn't click the 'connect' button, so
   // the selectedServer might not necessarily be the pinnedSrv in the meantime
-  const selectedServerId = getCurrentServer() || "";
+  const selectedServerId = getCurrentServer() || servers?.[0]?.id || "";
   // pinnedSrv indicates which server the user decided to connect to
 
   const theme = useTheme();
@@ -70,7 +69,7 @@ export function ServerSelector(props: {
     },
   );
 
-  const { data: profileData, isLoading: isProfileDataLoading } = useQuery({
+  const { data: profileData } = useQuery({
     queryKey: ["profile", selectedServerObj?.apiPrefix ?? ""],
     queryFn: () => getProfile(selectedServerObj?.apiPrefix ?? ""),
   });

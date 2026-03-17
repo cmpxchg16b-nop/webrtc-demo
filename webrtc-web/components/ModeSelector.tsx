@@ -1,6 +1,5 @@
 "use client";
 
-import "./globals.css";
 import { useColorScheme, Tooltip, IconButton } from "@mui/material";
 import { Fragment } from "react";
 import LightModeIcon from "@mui/icons-material/LightMode";

@@ -1,24 +1,10 @@
 "use client";
 
+import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import {
-  CssBaseline,
-  createTheme,
-  ThemeProvider,
-  useColorScheme,
-  Box,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
+import { CssBaseline, createTheme, ThemeProvider } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Fragment } from "react";
-import LightModeIcon from "@mui/icons-material/LightMode";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import ContrastIcon from "@mui/icons-material/Contrast";
-import { firstLetterCap } from "@/utls/strings";
-import { Menu } from "@mui/icons-material";
-import { ModeSelector } from "@/components/ModeSelector";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

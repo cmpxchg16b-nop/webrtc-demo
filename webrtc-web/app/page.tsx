@@ -87,6 +87,7 @@ import { logout } from "@/apis/logout";
 import { usePreference } from "@/apis/preference";
 import { FormatRTT } from "@/components/FormatRTT";
 import { ShowDisplayName } from "@/components/ShowDisplayName";
+import { ModeSelector } from "@/components/ModeSelector";
 
 const pingTimeoutMs = 3000;
 const pingIntvMs = 1000;
@@ -1517,7 +1518,7 @@ export default function Home() {
   const [msgPatches, setMsgPatches] = useState<MessagePatchesMap>({});
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const { data: servers = [] } = useQuery<WSServer[]>({
+  const { data: servers, isLoading: isServersLoading } = useQuery<WSServer[]>({
     queryKey: ["signallingServers"],
     queryFn: () => getSignallingServers(),
   });
@@ -1963,7 +1964,9 @@ export default function Home() {
             })}
           </Box>
         </Box>
-      ) : (
+      ) : isServersLoading ? (
+        <Box>Loading Servers...</Box>
+      ) : servers && servers.length > 0 ? (
         <ServerSelector
           onLogout={handleLogout}
           connecting={wsConnStatus === WSConnStatusShort.Connecting}
@@ -1975,6 +1978,8 @@ export default function Home() {
           }}
           servers={servers}
         />
+      ) : (
+        <Box>No Servers found</Box>
       )}
     </Fragment>
   );
@@ -1988,44 +1993,52 @@ export default function Home() {
         display: "flex",
         alignItems: "center",
         gap: 1,
+        flexWrap: "wrap",
+        justifyContent: "space-between",
       }}
     >
-      {isMobile && (
-        <IconButton onClick={handleDrawerToggle}>
-          <MenuIcon />
-        </IconButton>
-      )}
-      {activeConn && (
-        <Fragment>
-          <RenderAvatar
-            username={connsMap[activeConn]?.node_name ?? ""}
-            size="small"
-            preferredColorIdx={
-              userPreferenceMap[activeConn]?.indexOfPreferColor
-            }
-            authentication={connsMap[activeConn]?.authentication}
-          />
-          <Box>
-            <ShowDisplayName
+      <Box
+        sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+      >
+        {isMobile && (
+          <IconButton onClick={handleDrawerToggle}>
+            <MenuIcon />
+          </IconButton>
+        )}
+        {activeConn && (
+          <Fragment>
+            <RenderAvatar
               username={connsMap[activeConn]?.node_name ?? ""}
-              apiPrefix={pinnedserverObject?.apiPrefix || ""}
+              size="small"
+              preferredColorIdx={
+                userPreferenceMap[activeConn]?.indexOfPreferColor
+              }
+              authentication={connsMap[activeConn]?.authentication}
             />
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <ConnStatusDisplay
-              connStatus={convertRTCPeerConnStatus(
-                connTrackStatus[activeConn]?.connectionStatus,
+            <Box>
+              <ShowDisplayName
+                username={connsMap[activeConn]?.node_name ?? ""}
+                apiPrefix={pinnedserverObject?.apiPrefix || ""}
+              />
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <ConnStatusDisplay
+                connStatus={convertRTCPeerConnStatus(
+                  connTrackStatus[activeConn]?.connectionStatus,
+                )}
+                colorCodes={undefined}
+              />
+              {connTrackStatus[activeConn]?.connectionStatus ===
+                "connected" && (
+                <Typography variant="caption" gutterBottom={false}>
+                  <FormatRTT rtt={connTrackStatus[activeConn]?.rtt} />
+                </Typography>
               )}
-              colorCodes={undefined}
-            />
-            {connTrackStatus[activeConn]?.connectionStatus === "connected" && (
-              <Typography variant="caption" gutterBottom={false}>
-                <FormatRTT rtt={connTrackStatus[activeConn]?.rtt} />
-              </Typography>
-            )}
-          </Box>
-        </Fragment>
-      )}
+            </Box>
+          </Fragment>
+        )}
+      </Box>
+      <ModeSelector />
     </Paper>
   );
 
@@ -2215,7 +2228,7 @@ export default function Home() {
               flexDirection: "column",
             }}
           >
-            {isMobile && (
+            {isMobile ? (
               <Paper
                 sx={{
                   flexShrink: 0,
@@ -2224,12 +2237,20 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   gap: 1,
+                  justifyContent: "space-between",
                 }}
               >
                 <IconButton onClick={handleDrawerToggle}>
                   <MenuIcon />
                 </IconButton>
+                <ModeSelector />
               </Paper>
+            ) : (
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <Box sx={{ padding: 1 }}>
+                  <ModeSelector />
+                </Box>
+              </Box>
             )}
             <Box
               sx={{
