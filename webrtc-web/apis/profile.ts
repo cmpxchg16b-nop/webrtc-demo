@@ -10,13 +10,13 @@ export function getProfile(apiPrefix: string, forUsername?: string) {
     query.set("username", forUsername);
     suffix = `?${query.toString()}`;
   }
-  return fetch(`${apiPrefix}/profile${suffix}`)
+  return fetch(`${apiPrefix}/profile${suffix}`, { credentials: "include" })
     .then((r) => r.json())
     .then((r) => r as Profile);
 }
 
 export function getProfileStatus(apiPrefix: string) {
-  return fetch(`${apiPrefix}/profile/status`)
+  return fetch(`${apiPrefix}/profile/status`, { credentials: "include" })
     .then((r) => r.json())
     .then((r) => r as ProfileStatus);
 }
@@ -124,7 +124,9 @@ function getDataURLFromBlob(blob: Blob): Promise<DataURL> {
 export async function getAvatar(username: string): Promise<DataURL> {
   const searchParams = new URLSearchParams();
   searchParams.set("username", username);
-  const response = await fetch(`/api/profile/avatar?${searchParams}`);
+  const response = await fetch(`/api/profile/avatar?${searchParams}`, {
+    credentials: "include",
+  });
   const contentType = response.headers.get("Content-Type");
   const isImageContent =
     typeof contentType === "string" && contentType.startsWith("image/");

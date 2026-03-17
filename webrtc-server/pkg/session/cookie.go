@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"sync"
 
@@ -12,8 +13,10 @@ import (
 // an implementation of handler.SessionManager
 
 type CookieSessionManager struct {
-	sessionStore sync.Map
-	CookieDomain string
+	sessionStore   sync.Map
+	CookieDomain   string
+	CookieSameSite string
+	CookieSecure   string
 }
 
 func (sessMngr *CookieSessionManager) getRandomSessionId() string {
@@ -55,6 +58,32 @@ func (sessMngr *CookieSessionManager) CreateSession(ctx context.Context, w http.
 	if domain := sessMngr.CookieDomain; domain != "" {
 		cookieObj.Domain = domain
 	}
+	if sameSite := sessMngr.CookieSameSite; sameSite != "" {
+		switch sameSite {
+		case "None":
+			cookieObj.SameSite = http.SameSiteNoneMode
+		case "Lax":
+			cookieObj.SameSite = http.SameSiteLaxMode
+		case "Strict":
+			cookieObj.SameSite = http.SameSiteStrictMode
+		default:
+			log.Println("Unknown cookie sameSite setting", sameSite)
+			cookieObj.SameSite = http.SameSiteDefaultMode
+		}
+	}
+	if secure := sessMngr.CookieSecure; secure != "" {
+		if secure == "true" {
+			cookieObj.Secure = true
+		} else if secure == "false" {
+			cookieObj.Secure = false
+		} else {
+			log.Println("Unknown cookie secure setting", secure)
+		}
+	}
+
+	// To understand why and when such options are usefull,
+	// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies
+
 	http.SetCookie(w, cookieObj)
 
 	return sessionId

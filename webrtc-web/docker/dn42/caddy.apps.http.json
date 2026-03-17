@@ -7,7 +7,7 @@
           "group": "main",
           "match": [
             {
-              "host": ["chat.dn42"],
+              "host": ["chat.dn42", "chat.duststars.dn42"],
               "path": ["/api/*"]
             }
           ],
@@ -86,7 +86,7 @@
         {
           "match": [
             {
-              "host": ["chat.dn42"]
+              "host": ["chat.dn42", "chat.duststars.dn42"]
             }
           ],
           "handle": [

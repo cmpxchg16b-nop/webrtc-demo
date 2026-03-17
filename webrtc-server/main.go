@@ -37,6 +37,8 @@ type CLI struct {
 	KioubitLoginPubkey        string        `name:"kioubit-login-pubkey" help:"The path to the PEM pubkey file in order to use the Sign in with Kioubit service, this is optional"`
 	ManagementListenAddress   string        `name:"management-listen" help:"Unix domain socket path listener of management API" default:"/var/run/webrtc-server/management.sock"`
 	CookieDomain              string        `name:"cookie-domain" help:"Only for issuing third-party cookie, use with caution" default:""`
+	CookieSameSite            string        `name:"cookie-samesite" help:"Override cookie sameSite setting" default:""`
+	CookieSecure              string        `name:"cookie-secure" help:"Override cookie secure setting" default:""`
 }
 
 var cli CLI
@@ -135,7 +137,9 @@ func main() {
 	})
 
 	sessMngr := &pkgsession.CookieSessionManager{
-		CookieDomain: cli.CookieDomain,
+		CookieDomain:   cli.CookieDomain,
+		CookieSameSite: cli.CookieSameSite,
+		CookieSecure:   cli.CookieSecure,
 	}
 	tokenMngr := pkgmyjwt.NewSimpleJWTManager(nil)
 	if tokenMngr == nil {
