@@ -19,20 +19,7 @@ A browser-to-browser P2P chat application built on WebRTC data channels, with a 
 
 ## Architecture
 
-```
-┌─────────────────┐      WebSocket signalling       ┌─────────────────┐
-│   webrtc-web    │  <--------------------------->  │  webrtc-server  │
-│  (Next.js/React)│                                 │      (Go)       │
-└─────────────────┘                                 └─────────────────┘
-         │                                                   │
-         │         WebRTC PeerConnection (SDP/ICE)           │
-         │ <--------------------------------------------->   │
-         │                                                   │
-┌─────────────────┐                                 ┌─────────────────┐
-│  webrtc-agents  │                                 │   STUN/TURN     │
-│    (Go bots)    │                                 │   (coturn)      │
-└─────────────────┘                                 └─────────────────┘
-```
+![Architecture Diagram](docs/architecture.png)
 
 The **signalling server** (`webrtc-server`) only brokers SDP offers/answers and ICE candidates over WebSocket. Once the peer connection is established, all chat messages, file chunks, pings, and audio tracks travel directly between peers.
 
